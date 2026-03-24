@@ -1,0 +1,105 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Pick & Mix | 당신의 취향을 연결합니다</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;700;900&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --black: #121212;
+            --accent: #6366F1; /* 세련된 퍼플 블루 */
+            --gray: #F9FAFB;
+        }
+
+        * { margin: 0; padding: 0; box-sizing: border-box; font-family: 'Inter', -apple-system, sans-serif; }
+        body { background-color: white; color: var(--black); line-height: 1.6; }
+
+        /* Navigation */
+        nav {
+            display: flex; justify-content: space-between; align-items: center;
+            padding: 20px 8%; position: fixed; width: 100%; top: 0;
+            background: rgba(255, 255, 255, 0.8); backdrop-filter: blur(10px); z-index: 1000;
+        }
+        .logo { font-size: 1.5rem; font-weight: 900; color: var(--accent); letter-spacing: -1px; }
+        .nav-links a { text-decoration: none; color: var(--black); margin-left: 30px; font-weight: 500; font-size: 0.9rem; }
+        .btn-start { background: var(--black); color: white; padding: 10px 20px; border-radius: 8px; }
+
+        /* Hero Section */
+        .hero {
+            height: 100vh; display: flex; flex-direction: column;
+            justify-content: center; align-items: center; text-align: center;
+            padding: 0 10%; background: radial-gradient(circle at 10% 20%, rgba(99, 102, 241, 0.05) 0%, transparent 50%);
+        }
+        .hero h1 { font-size: 4.5rem; font-weight: 900; line-height: 1.1; margin-bottom: 25px; letter-spacing: -3px; }
+        .hero p { font-size: 1.25rem; color: #666; max-width: 600px; margin-bottom: 40px; }
+        .hero span { color: var(--accent); }
+
+        /* Content Grid */
+        .section-title { padding: 80px 8% 40px; font-size: 1.8rem; font-weight: 800; }
+        .grid {
+            display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+            gap: 30px; padding: 0 8% 100px;
+        }
+        .card {
+            background: var(--gray); border-radius: 20px; padding: 30px;
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1); cursor: pointer;
+            border: 1px solid transparent;
+        }
+        .card:hover { 
+            transform: translateY(-10px); background: white; 
+            box-shadow: 0 20px 40px rgba(0,0,0,0.05); border-color: var(--accent);
+        }
+        .card-tag { font-size: 0.75rem; font-weight: 700; color: var(--accent); text-transform: uppercase; margin-bottom: 15px; display: block; }
+        .card h3 { font-size: 1.4rem; margin-bottom: 10px; }
+        .card p { color: #888; font-size: 0.95rem; }
+
+        @media (max-width: 768px) {
+            .hero h1 { font-size: 2.8rem; }
+            .nav-links { display: none; }
+        }
+    </style>
+</head>
+<body>
+
+    <nav>
+        <div class="logo">PICK&MIX</div>
+        <div class="nav-links">
+            <a href="#">Explore</a>
+            <a href="#">Community</a>
+            <a href="#" class="btn-start">Get Started</a>
+        </div>
+    </nav>
+
+    <section class="hero">
+        <h1>Select your <span>Taste</span>,<br>Connect with People.</h1>
+        <p>평범한 추천은 지루하니까. 나만의 리스트를 만들고 세상의 모든 취향을 탐험하세요.</p>
+        <button class="btn-start" style="padding: 18px 40px; font-size: 1.1rem; cursor: pointer; border: none;">지금 시작하기</button>
+    </section>
+
+    <h2 class="section-title">최근 업로드된 취향 리스트</h2>
+    <div class="grid">
+        <div class="card">
+            <span class="card-tag">Music</span>
+            <h3>비오는 날 듣기 좋은 LP</h3>
+            <p>창밖을 보며 즐기는 나만의 재즈 컬렉션</p>
+        </div>
+        <div class="card">
+            <span class="card-tag">Interior</span>
+            <h3>미니멀리스트의 데스크셋업</h3>
+            <p>생산성을 극대화하는 5가지 필수 아이템</p>
+        </div>
+        <div class="card">
+            <span class="card-tag">Travel</span>
+            <h3>나만 알고 싶은 제주 서쪽 카페</h3>
+            <p>관광객은 모르는 조용한 공간들</p>
+        </div>
+        <div class="card">
+            <span class="card-tag">Tech</span>
+            <h3>2026 필수 크롬 익스텐션</h3>
+            <p>업무 시간을 절반으로 줄여주는 도구들</p>
+        </div>
+    </div>
+
+</body>
+</html>
