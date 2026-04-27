@@ -1,0 +1,2516 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>UL · 울산의 여백을 기록하는 공간 지도</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,500;1,300&family=Noto+Sans+KR:wght@100;300;400;500;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css"/>
+<style>
+  :root {
+    --main-bg: #FFFFFF;
+    --ocean-deep: #1A3C5A;
+    --ocean-light: #E8F2F7;
+    --ocean-accent: #B8D4E3;
+    --white: #FFFFFF;
+    --glass: rgba(255, 255, 255, 0.85);
+    --container-width: 1300px;
+    --pattern-color: rgba(184, 212, 227, 0.2); 
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; -webkit-font-smoothing: antialiased; }
+  
+  html, body {
+    width: 100%; height: 100%;
+    overflow: hidden; 
+    font-family: 'Noto Sans KR', sans-serif;
+    background-color: var(--main-bg);
+    color: var(--ocean-deep);
+  }
+
+  body::before {
+    content: '';
+    position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+    background: 
+      radial-gradient(circle at 50% 50%, rgba(232, 242, 247, 0.5) 0%, rgba(255, 255, 255, 1) 100%),
+      linear-gradient(var(--pattern-color) 1px, transparent 1px),
+      linear-gradient(90deg, var(--pattern-color) 1px, transparent 1px);
+    background-size: 100% 100%, 60px 60px;
+    z-index: 0;
+    pointer-events: none;
+  }
+
+  .island-icon {
+    position: absolute;
+    background: var(--ocean-light);
+    border-radius: 45% 55% 70% 30% / 30% 60% 40% 70%;
+    filter: blur(40px);
+    z-index: 1;
+    opacity: 0.6;
+    animation: floatingIsland 10s infinite ease-in-out;
+  }
+  @keyframes floatingIsland {
+    0%, 100% { transform: translate(0, 0) rotate(0deg); }
+    50% { transform: translate(20px, -30px) rotate(5deg); }
+  }
+
+  .custom-scroll::-webkit-scrollbar { width: 4px; height: 6px; }
+  .custom-scroll::-webkit-scrollbar-track { background: rgba(0,0,0,0.02); border-radius: 10px; }
+  .custom-scroll::-webkit-scrollbar-thumb { background: var(--ocean-accent); border-radius: 10px; }
+
+  #main-wrapper {
+    width: 100%; height: 100%;
+    transition: transform 1.2s cubic-bezier(0.19, 1, 0.22, 1);
+    will-change: transform;
+    position: relative; z-index: 2;
+  }
+
+  section {
+    width: 100%; height: 100vh;
+    position: relative;
+    display: flex; align-items: center; justify-content: center;
+    overflow: hidden;
+  }
+
+  .container { max-width: var(--container-width); margin: 0 auto; padding: 0 40px; width: 100%; position: relative; z-index: 10; }
+
+  /* NAV */
+  nav {
+    position: fixed; top: 0; left: 0; right: 0; z-index: 1000;
+    background: var(--glass);
+    backdrop-filter: blur(15px);
+    height: 70px;
+    display: flex; align-items: center;
+    border-bottom: 1px solid rgba(184, 212, 227, 0.4);
+  }
+  .nav-inner { 
+    display: grid; 
+    grid-template-columns: 1fr auto 1fr; 
+    align-items: center; 
+    width: 100%; 
+  }
+  .nav-logo { 
+    cursor: pointer; 
+    justify-self: start; 
+    display: flex;
+    align-items: center;
+  }
+  .nav-logo svg { height: 38px; width: auto; }
+  .nav-links { 
+    display: flex; 
+    gap: 40px; 
+    justify-self: center; 
+  }
+  .nav-links a { font-size: 13px; text-decoration: none; color: var(--ocean-deep); letter-spacing: 1px; transition: 0.3s; font-weight: 500; cursor: pointer; position: relative; }
+  .nav-links a::after { content: ''; position: absolute; bottom: -5px; left: 0; width: 0; height: 1.5px; background: var(--ocean-accent); transition: 0.3s; }
+  .nav-links a:hover::after { width: 100%; }
+
+  .user-actions { display: flex; gap: 20px; align-items: center; justify-self: end; }
+  .user-actions a { font-size: 12px; text-decoration: none; color: var(--ocean-deep); letter-spacing: 1px; font-weight: 500; cursor: pointer; transition: 0.3s; }
+
+  /* SECTION HEADER */
+  .section-header-flex { display: flex; justify-content: space-between; align-items: flex-end; margin-bottom: 60px; }
+  .section-label { font-size: 11px; letter-spacing: 5px; color: var(--ocean-accent); margin-bottom: 10px; font-weight: 700; }
+  .section-title { font-family: 'Cormorant Garamond', serif; font-size: 52px; font-weight: 300; line-height: 1.2; letter-spacing: -1px; }
+  
+  .btn-explore {
+    padding: 10px 25px;
+    border: 1px solid var(--ocean-deep);
+    background: transparent;
+    color: var(--ocean-deep);
+    font-size: 12px;
+    letter-spacing: 2px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: 0.4s;
+    border-radius: 50px;
+  }
+  .btn-explore:hover {
+    background: var(--ocean-deep);
+    color: var(--white);
+  }
+
+  /* HERO */
+  .hero-floating-text { position: absolute; font-family: 'Cormorant Garamond', serif; font-weight: 300; color: var(--ocean-accent); opacity: 0.12; white-space: nowrap; user-select: none; pointer-events: none; z-index: 1; }
+  .txt-1 { font-size: 18vw; top: -3vw; left: -1vw; transform: rotate(-2deg); }
+  .txt-2 { font-size: 18vw; bottom: -3vw; right: -1vw; transform: rotate(2deg); }
+  .hero-content { text-align: center; position: relative; z-index: 10; margin-top: -20px; }
+  .hero-eyebrow { font-size: 13px; letter-spacing: 10px; color: var(--ocean-accent); margin-bottom: 25px; font-weight: 700; }
+  .hero-title { font-family: 'Cormorant Garamond', serif; font-size: clamp(40px, 6.5vw, 85px); font-weight: 300; line-height: 1.1; margin-bottom: 40px; }
+  .hero-title strong { font-weight: 400; font-style: italic; color: var(--ocean-accent); border-bottom: 3px solid var(--ocean-light); padding-bottom: 5px; }
+  .hero-search { 
+    display: flex; 
+    background: var(--white); 
+    border-radius: 50px; 
+    width: 100%; 
+    max-width: 540px; 
+    margin: 0 auto; 
+    padding: 6px; 
+    box-shadow: 0 20px 40px rgba(26, 60, 90, 0.08);
+    border: 1px solid var(--ocean-light);
+  }
+  .hero-search input { flex: 1; border: none; outline: none; padding: 12px 25px; font-size: 15px; font-family: inherit; background: transparent; color: var(--ocean-deep); }
+  .hero-search input::placeholder { color: rgba(26, 60, 90, 0.35); }
+  .hero-search button { background: var(--ocean-deep); color: var(--white); border: none; padding: 0 40px; cursor: pointer; transition: 0.4s; font-size: 13px; letter-spacing: 3px; border-radius: 50px; font-weight: 700; }
+
+  /* 홈 검색 드롭다운 */
+  .hero-search-wrap { position: relative; width: 100%; max-width: 540px; margin: 0 auto; }
+  .hero-search-dropdown {
+    position: absolute; top: calc(100% + 8px); left: 0; right: 0;
+    background: var(--white);
+    border-radius: 16px;
+    box-shadow: 0 20px 50px rgba(26,60,90,0.15);
+    border: 1px solid var(--ocean-light);
+    overflow: hidden;
+    display: none;
+    z-index: 999;
+    max-height: 340px;
+    overflow-y: auto;
+  }
+  .hero-search-dropdown.show { display: block; }
+  .hsd-section-label {
+    font-size: 10px; letter-spacing: 3px; font-weight: 700;
+    color: var(--ocean-accent); padding: 14px 18px 6px;
+  }
+  .hsd-item {
+    display: flex; align-items: center; gap: 12px;
+    padding: 10px 18px; cursor: pointer; transition: 0.15s;
+  }
+  .hsd-item:hover { background: var(--ocean-light); }
+  .hsd-dot {
+    width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0;
+  }
+  .hsd-name { font-size: 14px; color: var(--ocean-deep); font-weight: 500; }
+  .hsd-sub { font-size: 11px; color: #aaa; margin-left: auto; }
+  .hsd-mood-chip {
+    display: flex; align-items: center; gap: 8px;
+    padding: 10px 18px; cursor: pointer; transition: 0.15s;
+  }
+  .hsd-mood-chip:hover { background: var(--ocean-light); }
+  .hsd-mood-icon { font-size: 16px; }
+  .hsd-mood-name { font-size: 13px; color: var(--ocean-deep); font-weight: 500; }
+  .hsd-mood-desc { font-size: 11px; color: #aaa; margin-left: auto; }
+  .hsd-empty { padding: 24px 18px; font-size: 13px; color: #aaa; text-align: center; }
+
+  /* EXPLORE */
+  .explore-wrapper { 
+    display: flex; 
+    gap: 25px; 
+    overflow-x: auto; 
+    padding-bottom: 40px;
+    cursor: grab;
+    user-select: none;
+  }
+  .explore-wrapper::-webkit-scrollbar { display: block; height: 6px; } 
+  .explore-wrapper:active { cursor: grabbing; }
+
+  .cafe-card { flex: 0 0 320px; position: relative; height: 480px; overflow: hidden; border-radius: 20px; transition: 0.6s cubic-bezier(0.165, 0.84, 0.44, 1); box-shadow: 0 15px 30px rgba(0,0,0,0.05); cursor: pointer; }
+  .cafe-card img { width: 100%; height: 100%; object-fit: cover; transition: 1.2s; filter: brightness(0.9); pointer-events: none; }
+  .cafe-card-info { position: absolute; bottom: 0; left: 0; width: 100%; padding: 35px; background: linear-gradient(to top, rgba(26, 60, 90, 0.7), transparent); color: var(--white); transform: translateY(10px); opacity: 0; transition: 0.5s; }
+  .cafe-card:hover .cafe-card-info { transform: translateY(0); opacity: 1; }
+  .cafe-card:hover img { transform: scale(1.08); filter: brightness(1); }
+
+  /* SEARCH OVERLAY WINDOW */
+  #search-overlay {
+    position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+    background: var(--white); z-index: 2000;
+    display: none; flex-direction: column;
+    padding: 100px 40px 60px; overflow-y: auto;
+  }
+  .overlay-top-bar { position: fixed; top: 0; left: 0; right: 0; height: 70px; background: var(--white); display: flex; align-items: center; padding: 0 40px; z-index: 2010; border-bottom: 1px solid var(--ocean-light); }
+  
+  .search-header { max-width: 1300px; margin: 0 auto 40px; width: 100%; }
+  .search-header h2 { font-family: 'Noto Sans KR', sans-serif; font-size: 42px; font-weight: 300; margin-bottom: 30px; letter-spacing: -1px; }
+  
+  .filter-group { margin-bottom: 40px; }
+  .filter-label { font-size: 11px; letter-spacing: 3px; font-weight: 700; color: var(--ocean-accent); margin-bottom: 15px; display: block; }
+  .filter-options { display: flex; gap: 10px; flex-wrap: wrap; }
+  .filter-btn { padding: 10px 20px; border-radius: 30px; border: 1px solid var(--ocean-light); background: transparent; font-size: 13px; color: var(--ocean-deep); cursor: pointer; transition: 0.3s; }
+  .filter-btn:hover, .filter-btn.active { background: var(--ocean-deep); color: var(--white); border-color: var(--ocean-deep); }
+
+  .random-list { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 20px; max-width: 1300px; margin: 0 auto; width: 100%; }
+  .list-item { border-radius: 15px; overflow: hidden; background: var(--ocean-light); height: 260px; position: relative; cursor: pointer; transition: 0.4s; }
+  .list-item:hover { transform: translateY(-4px); box-shadow: 0 16px 32px rgba(0,0,0,0.12); }
+  .list-item img { width: 100%; height: 100%; object-fit: cover; transition: 0.6s; }
+  .list-item:hover img { transform: scale(1.08); }
+  .list-info { position: absolute; bottom: 0; left: 0; width: 100%; padding: 18px 16px; background: linear-gradient(transparent, rgba(26,60,90,0.85)); color: var(--white); }
+  .list-info h4 { font-size: 15px; margin-bottom: 4px; font-weight: 600; }
+  .list-info p { font-size: 12px; opacity: 0.8; }
+
+  /* Inner Scroll Container */
+  .inner-scroll-container { 
+    width: 100%; height: 100%; 
+    display: flex; flex-direction: column; 
+    overflow-y: auto; scrollbar-width: none; 
+    position: relative; z-index: 10; 
+  }
+  .inner-scroll-container::-webkit-scrollbar { display: none; }
+
+  /* ===== MAP SECTION (수정됨) ===== */
+  .map-container-box { 
+    background: rgba(255, 255, 255, 0.6); 
+    backdrop-filter: blur(10px); 
+    padding: 50px; 
+    display: grid; 
+    grid-template-columns: 1.2fr 1fr; 
+    gap: 60px; 
+    align-items: start; 
+    width: 100%; max-width: var(--container-width);
+    margin: 90px auto 60px; 
+    border-radius: 30px; 
+    border: 1px solid var(--ocean-light); 
+    box-shadow: 0 20px 40px rgba(0,0,0,0.03); 
+  }
+
+  /* Leaflet 지도 컨테이너 */
+  #ulsan-map {
+    width: 100%;
+    height: 460px;
+    border-radius: 20px;
+    overflow: hidden;
+    position: relative;
+    z-index: 5;
+    border: 1px solid var(--ocean-light);
+    box-shadow: 0 10px 30px rgba(26,60,90,0.08);
+  }
+
+  /* 지도 위 태그 */
+  .map-overlay-tag {
+    position: absolute;
+    top: 12px;
+    left: 12px;
+    background: var(--ocean-deep);
+    color: var(--white);
+    padding: 8px 18px;
+    font-size: 11px;
+    letter-spacing: 2px;
+    font-weight: 600;
+    border-radius: 50px;
+    z-index: 999;
+    pointer-events: none;
+  }
+  .map-visual-wrapper {
+    position: relative;
+  }
+
+  /* 지도 타일 — 원래 색상 유지 */
+  #ulsan-map .leaflet-tile-pane {
+    filter: none;
+  }
+
+  /* 지도 확대/축소 커스텀 버튼 오버라이드 */
+  .leaflet-control-zoom {
+    border: none !important;
+    box-shadow: 0 4px 15px rgba(26,60,90,0.12) !important;
+  }
+  .leaflet-control-zoom a {
+    background: var(--white) !important;
+    color: var(--ocean-deep) !important;
+    border: 1px solid var(--ocean-light) !important;
+    font-size: 16px !important;
+    font-weight: 400 !important;
+    width: 34px !important;
+    height: 34px !important;
+    line-height: 34px !important;
+    transition: 0.2s !important;
+  }
+  .leaflet-control-zoom a:hover {
+    background: var(--ocean-deep) !important;
+    color: var(--white) !important;
+  }
+  .leaflet-control-attribution {
+    font-size: 9px !important;
+    opacity: 0.5 !important;
+  }
+
+  /* 지도 사이드 정보 */
+  .map-info-side {
+    display: flex;
+    flex-direction: column;
+    padding-top: 10px;
+  }
+
+  .map-title-flex { display: flex; align-items: center; justify-content: flex-start; margin-bottom: 20px; width: 100%; }
+  .map-arrow-inline { 
+    width: 50px; 
+    height: 50px; 
+    border: 1.5px solid var(--ocean-deep); 
+    border-radius: 50%; 
+    display: flex; 
+    align-items: center; 
+    justify-content: center; 
+    background: transparent; 
+    cursor: pointer; 
+    transition: all 0.5s cubic-bezier(0.19, 1, 0.22, 1); 
+    font-size: 20px; 
+    color: var(--ocean-deep);
+    flex-shrink: 0;
+    margin-left: 25px;
+  }
+  .map-arrow-inline:hover { 
+    background: var(--ocean-deep); 
+    color: var(--white); 
+    transform: translateX(8px) scale(1.1); 
+    box-shadow: 0 10px 20px rgba(26, 60, 90, 0.2);
+  }
+
+  /* 구역 필터 버튼 */
+  .map-filter-group {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-bottom: 20px;
+  }
+  .map-filter-btn {
+    padding: 7px 16px;
+    border-radius: 30px;
+    border: 1px solid var(--ocean-light);
+    background: transparent;
+    font-size: 12px;
+    color: var(--ocean-deep);
+    cursor: pointer;
+    transition: 0.3s;
+    font-family: 'Noto Sans KR', sans-serif;
+    font-weight: 500;
+    letter-spacing: 0.5px;
+  }
+  .map-filter-btn:hover, .map-filter-btn.active {
+    background: var(--ocean-deep);
+    color: var(--white);
+    border-color: var(--ocean-deep);
+  }
+
+  /* 카페 목록 패널 */
+  .cafe-list-panel {
+    flex: 1;
+    overflow-y: auto;
+    max-height: 240px;
+    scrollbar-width: thin;
+    scrollbar-color: var(--ocean-accent) transparent;
+  }
+  .cafe-list-panel::-webkit-scrollbar { width: 3px; }
+  .cafe-list-panel::-webkit-scrollbar-thumb { background: var(--ocean-accent); border-radius: 10px; }
+
+  .cafe-list-item {
+    display: flex;
+    align-items: center;
+    padding: 14px 12px;
+    border-bottom: 1px solid rgba(184,212,227,0.3);
+    cursor: pointer;
+    transition: 0.3s;
+    border-radius: 10px;
+    gap: 14px;
+  }
+  .cafe-list-item:hover {
+    background: var(--ocean-light);
+    padding-left: 18px;
+  }
+  .cafe-list-item.highlighted {
+    background: var(--ocean-light);
+    border-left: 3px solid var(--ocean-deep);
+    padding-left: 15px;
+  }
+  .cafe-list-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: var(--ocean-accent);
+    flex-shrink: 0;
+    transition: 0.3s;
+  }
+  .cafe-list-item:hover .cafe-list-dot,
+  .cafe-list-item.highlighted .cafe-list-dot {
+    background: var(--ocean-deep);
+    transform: scale(1.4);
+  }
+  .cafe-list-text { flex: 1; }
+  .cafe-list-name { font-size: 14px; font-weight: 500; color: var(--ocean-deep); }
+  .cafe-list-sub { font-size: 11px; color: var(--ocean-accent); margin-top: 2px; letter-spacing: 0.5px; }
+  .cafe-list-arrow { font-size: 13px; color: var(--ocean-accent); transition: 0.3s; }
+  .cafe-list-item:hover .cafe-list-arrow { color: var(--ocean-deep); transform: translateX(3px); }
+
+  /* 카페 팝업 커스텀 */
+  .leaflet-popup-content-wrapper {
+    border-radius: 16px !important;
+    box-shadow: 0 15px 35px rgba(26,60,90,0.15) !important;
+    border: 1px solid var(--ocean-light) !important;
+    padding: 0 !important;
+    overflow: hidden;
+  }
+  .leaflet-popup-content {
+    margin: 0 !important;
+    width: auto !important;
+  }
+  .leaflet-popup-tip {
+    background: var(--white) !important;
+  }
+  .cafe-popup {
+    padding: 18px 22px;
+    min-width: 200px;
+  }
+  .cafe-popup-badge {
+    font-size: 10px;
+    letter-spacing: 2px;
+    color: var(--ocean-accent);
+    font-weight: 700;
+    margin-bottom: 6px;
+  }
+  .cafe-popup-name {
+    font-size: 16px;
+    font-weight: 600;
+    color: var(--ocean-deep);
+    margin-bottom: 4px;
+  }
+  .cafe-popup-addr {
+    font-size: 12px;
+    color: #888;
+    margin-bottom: 12px;
+    line-height: 1.5;
+  }
+  .cafe-popup-tags {
+    display: flex;
+    gap: 6px;
+    flex-wrap: wrap;
+    margin-bottom: 14px;
+  }
+  .cafe-popup-tag {
+    background: var(--ocean-light);
+    color: var(--ocean-deep);
+    font-size: 11px;
+    padding: 4px 10px;
+    border-radius: 20px;
+    font-weight: 500;
+  }
+  .cafe-popup-btn {
+    display: block;
+    width: 100%;
+    padding: 9px;
+    background: var(--ocean-deep);
+    color: var(--white);
+    border: none;
+    border-radius: 10px;
+    font-size: 12px;
+    letter-spacing: 1px;
+    font-weight: 600;
+    cursor: pointer;
+    text-align: center;
+    font-family: 'Noto Sans KR', sans-serif;
+    transition: 0.3s;
+  }
+  .cafe-popup-btn:hover { opacity: 0.85; }
+
+  /* RANKING */
+  .rank-flex-wrapper { width: 100%; max-width: var(--container-width); margin: 150px auto 80px; padding: 0 40px; }
+  .rank-flex { display: flex; gap: 80px; align-items: flex-start; }
+  .rank-text-side { flex: 0.8; }
+  .rank-list-side { 
+    flex: 1.5; 
+    max-height: 500px; 
+    overflow-y: auto; 
+    padding-right: 15px;
+    overscroll-behavior: contain;
+  }
+
+  .rank-item { display: flex; align-items: center; padding: 30px 20px; border-bottom: 1px solid var(--ocean-light); transition: 0.4s; cursor: pointer; }
+  .rank-item:hover { background: var(--ocean-light); border-radius: 15px; transform: translateX(10px); }
+  .rank-num { font-family: 'Cormorant Garamond', serif; font-size: 24px; color: var(--ocean-accent); width: 60px; font-style: italic; }
+  .rank-name { flex: 1; font-size: 18px; font-weight: 500; display: flex; justify-content: space-between; align-items: center; }
+
+  /* FOOTER */
+  footer { 
+    background: var(--ocean-deep); 
+    color: var(--white); 
+    padding: 70px 0 40px; 
+    width: 100%; 
+    border-radius: 40px 40px 0 0;
+    margin-top: auto; 
+  }
+  .footer-bottom { opacity: 0.4; font-size: 11px; letter-spacing: 2px; border-top: 1px solid rgba(255,255,255,0.1); padding-top: 30px; display: flex; justify-content: space-between; }
+
+  .reveal { opacity: 0; transform: translateY(30px); transition: 1.2s cubic-bezier(0.19, 1, 0.22, 1); }
+  .reveal.visible { opacity: 1; transform: translateY(0); }
+
+  /* 분위기 예시 칩 */
+  .mood-example-chip {
+    display: inline-block;
+    padding: 8px 18px;
+    border-radius: 30px;
+    border: 1px solid var(--ocean-light);
+    font-size: 13px;
+    color: var(--ocean-deep);
+    cursor: pointer;
+    transition: 0.3s;
+    background: transparent;
+    font-family: 'Noto Sans KR', sans-serif;
+  }
+  .mood-example-chip:hover {
+    background: var(--ocean-deep);
+    color: var(--white);
+    border-color: var(--ocean-deep);
+  }
+
+  /* 분위기 검색 결과 카드 */
+  .mood-result-card {
+    display: flex;
+    align-items: center;
+    gap: 20px;
+    padding: 18px 20px;
+    border-radius: 16px;
+    background: var(--ocean-light);
+    margin-bottom: 12px;
+    cursor: pointer;
+    transition: 0.3s;
+    border: 1px solid transparent;
+  }
+  .mood-result-card:hover {
+    border-color: var(--ocean-accent);
+    background: var(--white);
+    transform: translateX(6px);
+    box-shadow: 0 8px 20px rgba(26,60,90,0.06);
+  }
+  .mood-result-img {
+    width: 70px; height: 70px;
+    border-radius: 12px;
+    object-fit: cover;
+    flex-shrink: 0;
+  }
+  .mood-result-info { flex: 1; }
+  .mood-result-name { font-size: 16px; font-weight: 600; color: var(--ocean-deep); margin-bottom: 4px; }
+  .mood-result-tags { display: flex; gap: 6px; flex-wrap: wrap; }
+  .mood-result-tag {
+    font-size: 11px; padding: 3px 10px;
+    border-radius: 20px;
+    background: rgba(26,60,90,0.08);
+    color: var(--ocean-deep);
+  }
+  .mood-result-match { font-size: 11px; color: var(--ocean-accent); margin-top: 4px; }
+  .mood-no-result { text-align: center; padding: 40px; color: var(--ocean-accent); font-size: 14px; opacity: 0.7; }
+
+  @keyframes markerPulse {
+    0%, 100% { transform: translate(-50%,-65%) scale(1); opacity: 0.15; }
+    50% { transform: translate(-50%,-65%) scale(1.6); opacity: 0; }
+  }
+
+  /* Access blocked 및 오류 메시지 완전 차단 */
+  .leaflet-tile-error { display: none !important; opacity: 0 !important; }
+  .leaflet-control-attribution a[href*="leaflet"] { display: none !important; }
+  #ulsan-map > div:not(.leaflet-pane):not(.leaflet-control-container) { display: none !important; }
+  #fullmap-container > div:not(.leaflet-pane):not(.leaflet-control-container) { display: none !important; }
+  /* Leaflet 내부 경고/차단 박스 숨김 */
+  .leaflet-pane iframe,
+  .leaflet-container > div:not(.leaflet-pane):not(.leaflet-control-container):not(.leaflet-proxy) {
+    display: none !important;
+  }
+
+  /* ── 카페 상세 전체화면 ── */
+  #cafe-detail-screen {
+    position: fixed; inset: 0; z-index: 3000;
+    background: var(--white);
+    transform: translateX(100%);
+    transition: transform 0.6s cubic-bezier(0.19, 1, 0.22, 1);
+    overflow-y: auto;
+    display: flex; flex-direction: column;
+  }
+  #cafe-detail-screen.open { transform: translateX(0); }
+
+  .cds-nav {
+    position: sticky; top: 0; z-index: 10;
+    height: 70px;
+    background: rgba(255,255,255,0.92);
+    backdrop-filter: blur(15px);
+    border-bottom: 1px solid var(--ocean-light);
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 0 48px;
+    flex-shrink: 0;
+  }
+  .cds-back-btn {
+    display: flex; align-items: center; gap: 10px;
+    background: none; border: none; cursor: pointer;
+    font-family: 'Noto Sans KR', sans-serif;
+    font-size: 13px; font-weight: 600; letter-spacing: 1px;
+    color: var(--ocean-deep); transition: 0.2s;
+  }
+  .cds-back-btn:hover { color: #C0392B; }
+  .cds-back-arrow {
+    width: 32px; height: 32px; border-radius: 50%;
+    border: 1.5px solid var(--ocean-light);
+    display: flex; align-items: center; justify-content: center;
+    font-size: 14px; transition: 0.2s;
+  }
+  .cds-back-btn:hover .cds-back-arrow { background: #C0392B; border-color: #C0392B; color: #fff; }
+  .cds-nav-logo {
+    font-family: 'Cormorant Garamond', serif;
+    font-size: 18px; letter-spacing: 6px; color: var(--ocean-deep); font-weight: 400;
+  }
+  .cds-nav-map-btn {
+    padding: 8px 22px; border-radius: 50px;
+    border: 1.5px solid var(--ocean-light);
+    background: transparent; cursor: pointer;
+    font-family: 'Noto Sans KR', sans-serif;
+    font-size: 12px; font-weight: 600; letter-spacing: 1px;
+    color: var(--ocean-deep); transition: 0.3s;
+  }
+  .cds-nav-map-btn:hover { background: var(--ocean-deep); color: #fff; border-color: var(--ocean-deep); }
+
+  .cds-hero {
+    position: relative;
+    height: 360px; flex-shrink: 0;
+    background: var(--ocean-light);
+    overflow: hidden;
+    display: flex; align-items: flex-end;
+  }
+  .cds-hero-bg {
+    position: absolute; inset: 0;
+    background: linear-gradient(135deg, var(--ocean-light) 0%, #d4e9f5 100%);
+  }
+  .cds-hero-pattern {
+    position: absolute; inset: 0; opacity: 0.06;
+    background-image: linear-gradient(var(--ocean-deep) 1px, transparent 1px),
+                      linear-gradient(90deg, var(--ocean-deep) 1px, transparent 1px);
+    background-size: 40px 40px;
+  }
+  .cds-hero-content {
+    position: relative; z-index: 2;
+    padding: 0 48px 44px; width: 100%;
+  }
+  .cds-district-badge {
+    display: inline-flex; align-items: center; gap: 8px;
+    background: rgba(255,255,255,0.75); backdrop-filter: blur(8px);
+    border: 1px solid rgba(255,255,255,0.9);
+    padding: 6px 14px; border-radius: 30px;
+    font-size: 11px; font-weight: 700; letter-spacing: 2px;
+    color: var(--ocean-deep); margin-bottom: 16px;
+  }
+  .cds-district-dot {
+    width: 8px; height: 8px; border-radius: 50%;
+  }
+  .cds-cafe-title {
+    font-family: 'Cormorant Garamond', serif;
+    font-size: clamp(36px, 5vw, 62px); font-weight: 400;
+    line-height: 1.05; color: var(--ocean-deep);
+    margin-bottom: 10px;
+  }
+  .cds-cafe-subtitle {
+    font-size: 14px; color: #777; letter-spacing: 0.5px;
+  }
+
+  .cds-body {
+    max-width: 860px; margin: 0 auto;
+    padding: 56px 48px 80px; width: 100%;
+  }
+
+  /* 별점 */
+  .cds-rating-block {
+    display: flex; align-items: center; gap: 20px;
+    padding: 28px 32px;
+    background: #fafafa; border-radius: 20px;
+    margin-bottom: 48px;
+    border: 1px solid var(--ocean-light);
+  }
+  .cds-rating-score {
+    font-family: 'Cormorant Garamond', serif;
+    font-size: 56px; font-weight: 400; line-height: 1;
+    color: var(--ocean-deep);
+  }
+  .cds-rating-right { display: flex; flex-direction: column; gap: 6px; }
+  .cds-stars { display: flex; gap: 3px; }
+  .cds-star {
+    font-size: 20px; color: #ddd; transition: color 0.1s;
+  }
+  .cds-star.filled { color: #E74C3C; }
+  .cds-star.half { 
+    position: relative; color: #ddd;
+  }
+  .cds-star.half::before {
+    content: '★'; position: absolute; left: 0; top: 0;
+    color: #E74C3C; width: 50%; overflow: hidden; display: block;
+  }
+  .cds-rating-count {
+    font-size: 12px; color: #999; letter-spacing: 1px;
+  }
+  .cds-rating-cats {
+    margin-left: auto;
+    display: flex; flex-direction: column; gap: 10px; min-width: 200px;
+  }
+  .cds-cat-row { display: flex; align-items: center; gap: 10px; }
+  .cds-cat-label { font-size: 12px; color: #666; min-width: 70px; }
+  .cds-cat-bar-bg { flex: 1; height: 4px; background: #eee; border-radius: 4px; overflow: hidden; }
+  .cds-cat-bar-fill {
+    height: 100%; background: linear-gradient(90deg,#C0392B,#E74C3C);
+    border-radius: 4px; transition: width 0.9s cubic-bezier(0.165,0.84,0.44,1);
+  }
+  .cds-cat-val { font-size: 11px; color: #C0392B; font-weight: 700; min-width: 28px; text-align: right; }
+
+  /* 섹션 구분 */
+  .cds-section { margin-bottom: 48px; }
+  .cds-section-eyebrow {
+    font-size: 10px; letter-spacing: 4px; font-weight: 700;
+    color: var(--ocean-accent); margin-bottom: 20px;
+    display: flex; align-items: center; gap: 12px;
+  }
+  .cds-section-eyebrow::after {
+    content: ''; flex: 1; height: 1px; background: var(--ocean-light);
+  }
+
+  /* 태그 */
+  .cds-tags { display: flex; gap: 8px; flex-wrap: wrap; }
+  .cds-tag {
+    background: var(--ocean-light); color: var(--ocean-deep);
+    font-size: 12px; padding: 6px 14px; border-radius: 20px; font-weight: 500;
+  }
+
+  /* 메뉴 */
+  .cds-menu-grid {
+    display: grid; grid-template-columns: 1fr 1fr; gap: 12px;
+  }
+  .cds-menu-item {
+    display: flex; justify-content: space-between; align-items: center;
+    padding: 16px 20px;
+    background: #fafafa; border-radius: 14px;
+    border: 1px solid var(--ocean-light);
+    transition: 0.2s;
+  }
+  .cds-menu-item:hover { border-color: #E74C3C; background: #fff5f5; }
+  .cds-menu-name { font-size: 14px; font-weight: 500; color: var(--ocean-deep); }
+  .cds-menu-price { font-size: 13px; font-weight: 700; color: #C0392B; }
+
+  /* 기본정보 */
+  .cds-info-grid {
+    display: grid; grid-template-columns: 1fr 1fr; gap: 16px;
+  }
+  .cds-info-card {
+    padding: 20px 22px; background: #fafafa;
+    border-radius: 14px; border: 1px solid var(--ocean-light);
+  }
+  .cds-info-icon { font-size: 18px; margin-bottom: 8px; display: block; }
+  .cds-info-label { font-size: 10px; letter-spacing: 2px; color: var(--ocean-accent); font-weight: 700; margin-bottom: 6px; }
+  .cds-info-value { font-size: 13px; color: var(--ocean-deep); line-height: 1.6; }
+
+  /* 하단 버튼 */
+  .cds-footer-actions {
+    display: flex; gap: 12px; margin-top: 56px;
+  }
+  .cds-btn-naver {
+    flex: 1; padding: 16px;
+    border: 1.5px solid var(--ocean-deep);
+    background: transparent; color: var(--ocean-deep);
+    font-size: 13px; letter-spacing: 2px; font-weight: 700;
+    cursor: pointer; border-radius: 50px;
+    font-family: 'Noto Sans KR', sans-serif; transition: 0.3s;
+  }
+  .cds-btn-naver:hover { background: var(--ocean-deep); color: #fff; }
+  .cds-btn-back {
+    flex: 1; padding: 16px;
+    border: none; background: #C0392B; color: #fff;
+    font-size: 13px; letter-spacing: 2px; font-weight: 700;
+    cursor: pointer; border-radius: 50px;
+    font-family: 'Noto Sans KR', sans-serif; transition: 0.3s;
+  }
+  .cds-btn-back:hover { background: #a93226; }
+</style>
+</head>
+<body>
+
+<!-- 전체화면 지도 모달 -->
+<div id="fullmap-modal" style="
+  display:none; position:fixed; inset:0; z-index:4000;
+  background:rgba(10,25,40,0.55); backdrop-filter:blur(6px);
+  align-items:center; justify-content:center;
+">
+  <div style="
+    position:relative; width:92vw; height:88vh; max-width:1400px;
+    background:#fff; border-radius:24px; overflow:hidden;
+    box-shadow:0 40px 80px rgba(0,0,0,0.3);
+    display:flex; flex-direction:column;
+  ">
+    <!-- 모달 헤더 -->
+    <div style="
+      height:56px; background:rgba(255,255,255,0.95); backdrop-filter:blur(12px);
+      border-bottom:1px solid var(--ocean-light);
+      display:flex; align-items:center; justify-content:space-between;
+      padding:0 28px; flex-shrink:0; z-index:10;
+    ">
+      <div style="font-family:'Cormorant Garamond',serif; font-size:18px; letter-spacing:4px; color:var(--ocean-deep); font-weight:400;">울산 카페 지도</div>
+      <div style="display:flex; gap:8px; align-items:center;">
+        <div id="fullmap-district-filter" style="display:flex; gap:6px;">
+          <button class="map-filter-btn active" onclick="fullMapFilter('전체',this)">전체</button>
+          <button class="map-filter-btn" onclick="fullMapFilter('남구',this)">남구</button>
+          <button class="map-filter-btn" onclick="fullMapFilter('중구',this)">중구</button>
+          <button class="map-filter-btn" onclick="fullMapFilter('동구',this)">동구</button>
+          <button class="map-filter-btn" onclick="fullMapFilter('북구',this)">북구</button>
+          <button class="map-filter-btn" onclick="fullMapFilter('울주군',this)">울주군</button>
+        </div>
+        <button onclick="closeFullMap()" style="
+          width:36px; height:36px; border-radius:50%; border:1.5px solid var(--ocean-light);
+          background:transparent; cursor:pointer; font-size:16px; color:var(--ocean-deep);
+          display:flex; align-items:center; justify-content:center;
+          transition:0.2s; margin-left:10px;
+        " onmouseover="this.style.background='var(--ocean-deep)';this.style.color='#fff'"
+           onmouseout="this.style.background='transparent';this.style.color='var(--ocean-deep)'">✕</button>
+      </div>
+    </div>
+    <!-- 전체 지도 -->
+    <div id="fullmap-container" style="flex:1; position:relative;"></div>
+  </div>
+</div>
+
+<!-- 카페 상세 전체화면 -->
+<div id="cafe-detail-screen">
+  <nav class="cds-nav">
+    <button class="cds-back-btn" onclick="closeCafeDetail()">
+      <span class="cds-back-arrow">←</span>
+      나가기
+    </button>
+    <div class="cds-nav-logo">
+      <svg viewBox="0 0 90 40" xmlns="http://www.w3.org/2000/svg" fill="none" style="height:32px;width:auto;">
+        <text x="1" y="32" font-family="Cormorant Garamond, serif" font-size="36" font-weight="500" fill="#1A3C5A" letter-spacing="2">UL</text>
+        <path d="M8 6 Q10 2 8 0" stroke="#B8D4E3" stroke-width="1.2" stroke-linecap="round" fill="none"/>
+        <path d="M13 7 Q15 2.5 13 0" stroke="#B8D4E3" stroke-width="1.2" stroke-linecap="round" fill="none"/>
+        <path d="M18 6 Q20 2 18 0" stroke="#B8D4E3" stroke-width="1.2" stroke-linecap="round" fill="none"/>
+        <line x1="2" y1="36" x2="28" y2="36" stroke="#B8D4E3" stroke-width="1.2" stroke-linecap="round"/>
+        <ellipse cx="15" cy="37.5" rx="10" ry="1.5" stroke="#B8D4E3" stroke-width="0.8" fill="none"/>
+        <path d="M28 20 Q35 20 35 26 Q35 32 28 32" stroke="#1A3C5A" stroke-width="1.5" stroke-linecap="round" fill="none"/>
+      </svg>
+    </div>
+    <div style="width:80px;"></div>
+  </nav>
+
+  <div class="cds-hero">
+    <div class="cds-hero-bg"></div>
+    <div class="cds-hero-pattern"></div>
+    <div class="cds-hero-content">
+      <div class="cds-district-badge">
+        <span class="cds-district-dot" id="cds-dot"></span>
+        <span id="cds-district"></span>
+      </div>
+      <div class="cds-cafe-title" id="cds-title"></div>
+      <div class="cds-cafe-subtitle" id="cds-subtitle"></div>
+    </div>
+  </div>
+
+  <div class="cds-body">
+
+    <!-- AI 분위기 설명 -->
+    <div class="cds-section" id="cds-ai-section">
+      <div class="cds-section-eyebrow">✦ AI VIBE SUMMARY</div>
+      <div id="cds-ai-desc" style="background:linear-gradient(135deg,#f0f7fb,#e8f2f7); border-radius:18px; padding:28px 30px; border:1px solid var(--ocean-light); font-size:14px; line-height:1.9; color:var(--ocean-deep); min-height:80px;">
+        <span style="opacity:0.4; letter-spacing:2px; font-size:12px;">분석 중...</span>
+      </div>
+    </div>
+
+    <!-- 분위기 태그 -->
+    <div class="cds-section">
+      <div class="cds-section-eyebrow">MOOD TAGS</div>
+      <div class="cds-tags" id="cds-tags"></div>
+    </div>
+
+    <!-- 메뉴 -->
+    <div class="cds-section">
+      <div class="cds-section-eyebrow">MENU</div>
+      <div class="cds-menu-grid" id="cds-menu"></div>
+    </div>
+
+    <!-- 기본 정보 -->
+    <div class="cds-section">
+      <div class="cds-section-eyebrow">INFO</div>
+      <div class="cds-info-grid" id="cds-info"></div>
+    </div>
+
+  </div>
+</div>
+
+<div id="search-overlay" class="custom-scroll">
+  <div class="overlay-top-bar">
+    <div class="nav-logo" onclick="closeSearch()">
+      <svg viewBox="0 0 90 40" xmlns="http://www.w3.org/2000/svg" fill="none">
+        <text x="1" y="32" font-family="Cormorant Garamond, serif" font-size="36" font-weight="500" fill="#1A3C5A" letter-spacing="2">UL</text>
+        <path d="M8 6 Q10 2 8 0" stroke="#B8D4E3" stroke-width="1.2" stroke-linecap="round" fill="none"/>
+        <path d="M13 7 Q15 2.5 13 0" stroke="#B8D4E3" stroke-width="1.2" stroke-linecap="round" fill="none"/>
+        <path d="M18 6 Q20 2 18 0" stroke="#B8D4E3" stroke-width="1.2" stroke-linecap="round" fill="none"/>
+        <line x1="2" y1="36" x2="28" y2="36" stroke="#B8D4E3" stroke-width="1.2" stroke-linecap="round"/>
+        <ellipse cx="15" cy="37.5" rx="10" ry="1.5" stroke="#B8D4E3" stroke-width="0.8" fill="none"/>
+        <path d="M28 20 Q35 20 35 26 Q35 32 28 32" stroke="#1A3C5A" stroke-width="1.5" stroke-linecap="round" fill="none"/>
+      </svg>
+    </div>
+    <button onclick="closeSearch()" style="margin-left:auto; background:none; border:none; font-size:22px; cursor:pointer; color:var(--ocean-deep); line-height:1;">✕</button>
+  </div>
+  
+  <div class="search-header">
+    <h2>울산 카페 탐방</h2>
+
+
+
+    <!-- 이름 검색 패널 -->
+    <div id="panel-search">
+      <div class="hero-search" style="margin: 0 0 35px 0; max-width: 100%;">
+        <input type="text" id="overlay-search-input" placeholder="카페 이름과 분위기를 검색해보세요." onkeydown="if(event.key==='Enter') filterOverlayCafes()">
+        <button onclick="filterOverlayCafes()">검색</button>
+      </div>
+
+      <div class="filter-group">
+        <span class="filter-label">DISTRICT / 지역</span>
+        <div class="filter-options" id="district-filter-group">
+          <button class="filter-btn active" onclick="setFilter('district','전체',this)">전체</button>
+          <button class="filter-btn" onclick="setFilter('district','남구',this)">남구</button>
+          <button class="filter-btn" onclick="setFilter('district','중구',this)">중구</button>
+          <button class="filter-btn" onclick="setFilter('district','동구',this)">동구</button>
+          <button class="filter-btn" onclick="setFilter('district','북구',this)">북구</button>
+          <button class="filter-btn" onclick="setFilter('district','울주군',this)">울주군</button>
+        </div>
+      </div>
+
+
+
+      <div id="filter-result-count" style="display:none;"></div>
+    </div>
+
+    <!-- 분위기 검색 패널 -->
+    <div id="panel-mood" style="display:none;">
+      <p style="font-size:14px; color:var(--ocean-deep); opacity:0.7; margin-bottom:20px; line-height:1.8;">원하는 분위기를 자유롭게 적어보세요. 어울리는 카페를 찾아드려요.</p>
+      <div style="display:flex; gap:10px; margin-bottom:20px; flex-wrap:wrap;">
+        <span class="mood-example-chip" onclick="setMoodInput(this)">조용히 책 읽기 좋은 곳</span>
+        <span class="mood-example-chip" onclick="setMoodInput(this)">친구랑 수다 떨기 좋은 넓은 카페</span>
+        <span class="mood-example-chip" onclick="setMoodInput(this)">바다가 보이는 뷰 맛집</span>
+        <span class="mood-example-chip" onclick="setMoodInput(this)">노트북 작업하기 좋은 곳</span>
+        <span class="mood-example-chip" onclick="setMoodInput(this)">인스타 감성 아기자기한 카페</span>
+        <span class="mood-example-chip" onclick="setMoodInput(this)">나무 인테리어 따뜻한 분위기</span>
+      </div>
+      <div class="hero-search" style="margin: 0 0 30px 0; max-width: 100%;">
+        <input type="text" id="mood-text-input" placeholder="예) 조용하고 감성적인 카페, 오션뷰 있는 카페...">
+        <button onclick="searchByMood()">찾기</button>
+      </div>
+      <div id="mood-search-result"></div>
+    </div>
+  </div>
+
+  <div class="random-list" id="random-cafe-container"></div>
+</div>
+
+<div class="island-icon" style="width: 350px; height: 250px; top: 10%; right: -5%;"></div>
+<div class="island-icon" style="width: 250px; height: 350px; bottom: 5%; left: -5%; animation-delay: -5s;"></div>
+
+<nav>
+  <div class="container nav-inner">
+    <div class="nav-logo" onclick="goToSection(0)">
+      <svg viewBox="0 0 90 40" xmlns="http://www.w3.org/2000/svg" fill="none">
+        <!-- U = cup body -->
+        <text x="1" y="32" font-family="Cormorant Garamond, serif" font-size="36" font-weight="500" fill="#1A3C5A" letter-spacing="2">UL</text>
+        <!-- steam wisps above U -->
+        <path d="M8 6 Q10 2 8 0" stroke="#B8D4E3" stroke-width="1.2" stroke-linecap="round" fill="none"/>
+        <path d="M13 7 Q15 2.5 13 0" stroke="#B8D4E3" stroke-width="1.2" stroke-linecap="round" fill="none"/>
+        <path d="M18 6 Q20 2 18 0" stroke="#B8D4E3" stroke-width="1.2" stroke-linecap="round" fill="none"/>
+        <!-- saucer line under U -->
+        <line x1="2" y1="36" x2="28" y2="36" stroke="#B8D4E3" stroke-width="1.2" stroke-linecap="round"/>
+        <ellipse cx="15" cy="37.5" rx="10" ry="1.5" stroke="#B8D4E3" stroke-width="0.8" fill="none"/>
+        <!-- handle on U (right side) -->
+        <path d="M28 20 Q35 20 35 26 Q35 32 28 32" stroke="#1A3C5A" stroke-width="1.5" stroke-linecap="round" fill="none"/>
+      </svg>
+    </div>
+    <div class="nav-links">
+      <a onclick="goToSection(1)">탐색</a>
+      <a onclick="goToSection(2)">지도</a>
+      <a onclick="goToSection(3)">순위</a>
+    </div>
+    <div class="user-actions">
+      <a>로그인</a>
+      <a>회원가입</a>
+    </div>
+  </div>
+</nav>
+
+<div id="main-wrapper">
+  <!-- HERO -->
+  <section class="hero visible">
+    <div class="hero-floating-text txt-1">ULSAN</div>
+    <div class="hero-floating-text txt-2">CAFE</div>
+    <div class="container hero-content">
+      <div class="hero-eyebrow reveal visible">THE MARGIN OF CITY</div>
+      <h1 class="hero-title reveal visible">울산에서 당신만의<br><strong>카페를 찾아보세요</strong></h1>
+      <div class="hero-search-wrap">
+        <div class="hero-search reveal visible">
+          <input type="text" id="hero-search-input"
+            placeholder="울산의 카페를 검색해보세요 (예: 분위기, 카페명)"
+            oninput="heroSearchLive(this.value)"
+            onkeydown="if(event.key==='Enter'){ heroSearch(); closeHeroDropdown(); }"
+            onblur="setTimeout(closeHeroDropdown, 150)"
+            onfocus="heroSearchLive(this.value)">
+          <button onclick="heroSearch(); closeHeroDropdown()">검색</button>
+        </div>
+        <div class="hero-search-dropdown" id="hero-search-dropdown"></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- EXPLORE -->
+  <section id="explore">
+    <div class="container">
+      <div class="section-header-flex reveal">
+        <div class="title-group">
+          <div class="section-label">01 / COLLECTED</div>
+          <h2 class="section-title">다양한 카페 탐색</h2>
+        </div>
+        <button class="btn-explore" onclick="openSearch()">탐색하기</button>
+      </div>
+      <div class="explore-wrapper reveal custom-scroll" id="explore-drag-list">
+        <div class="cafe-card" onclick="openCafeDetail('어라운드스터디카페')">
+          <img src="https://images.unsplash.com/photo-1495474472287-4d71bcdd2085?w=800">
+          <div class="cafe-card-info"><h3>어라운드스터디카페</h3><p>CHEONGOK / 울산천곡점</p></div>
+        </div>
+        <div class="cafe-card" onclick="openCafeDetail('백림 베이커리')">
+          <img src="https://images.unsplash.com/photo-1559496417-e7f25cb247f3?w=800">
+          <div class="cafe-card-info"><h3>백림 베이커리</h3><p>SAMSANDONG / 삼산점</p></div>
+        </div>
+        <div class="cafe-card" onclick="openCafeDetail('카페 온그린')">
+          <img src="https://images.unsplash.com/photo-1514432324607-a09d9b4aefdd?w=800">
+          <div class="cafe-card-info"><h3>카페 온그린</h3><p>ULSAN / 온그린</p></div>
+        </div>
+        <div class="cafe-card" onclick="openCafeDetail('해월당')">
+          <img src="https://images.unsplash.com/photo-1445116572660-236099ec97a0?w=800">
+          <div class="cafe-card-info"><h3>해월당</h3><p>MUGEODONG / 울산대점</p></div>
+        </div>
+        <div class="cafe-card" onclick="openCafeDetail('컴포즈커피')">
+          <img src="https://images.unsplash.com/photo-1509042239860-f550ce710b93?w=800">
+          <div class="cafe-card-info"><h3>컴포즈 커피</h3><p>ULSAN / 컴포즈</p></div>
+        </div>
+        <div class="cafe-card" onclick="openCafeDetail('이디야커피')">
+          <img src="https://images.unsplash.com/photo-1511920170033-f8396924c348?w=800">
+          <div class="cafe-card-info"><h3>이디야커피</h3><p>MUGEODONG / 울산대점</p></div>
+        </div>
+        <div class="cafe-card" onclick="openCafeDetail('메이즈메이즈')">
+          <img src="https://images.unsplash.com/photo-1554118811-1e0d58224f24?w=800">
+          <div class="cafe-card-info"><h3>메이즈메이즈</h3><p>SAMSANDONG / 삼산점</p></div>
+        </div>
+        <div class="cafe-card" onclick="openCafeDetail('카페 코이')">
+          <img src="https://images.unsplash.com/photo-1497935586351-b67a49e012bf?w=800">
+          <div class="cafe-card-info"><h3>카페 코이</h3><p>JUNG-GU / 태화동</p></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- MAP SECTION (수정됨) -->
+  <section id="map">
+    <div class="inner-scroll-container">
+      <div class="container">
+        <div class="map-container-box reveal">
+
+          <!-- 왼쪽: 실제 Leaflet 지도 -->
+          <div class="map-visual-wrapper">
+            <div id="ulsan-map"></div>
+          </div>
+
+          <!-- 오른쪽: 정보 패널 -->
+          <div class="map-info-side">
+            <div class="section-label">02 / COORDINATES</div>
+            <div class="map-title-flex">
+              <h2 class="section-title" style="font-size: 38px; margin-bottom: 0;">내 근처 카페 지도</h2>
+              <button class="map-arrow-inline" onclick="openFullMap()"><span>→</span></button>
+            </div>
+            <p style="margin-bottom: 20px; opacity: 0.7; line-height: 1.8; font-weight: 300; font-size: 14px;">울산에서 당신만의 카페를 찾아보세요.</p>
+
+            <!-- 구역 필터 -->
+            <div class="map-filter-group" id="map-district-filter">
+              <button class="map-filter-btn active" onclick="filterMapCafes('전체', this)">전체</button>
+              <button class="map-filter-btn" onclick="filterMapCafes('남구', this)">남구</button>
+              <button class="map-filter-btn" onclick="filterMapCafes('중구', this)">중구</button>
+              <button class="map-filter-btn" onclick="filterMapCafes('동구', this)">동구</button>
+              <button class="map-filter-btn" onclick="filterMapCafes('북구', this)">북구</button>
+              <button class="map-filter-btn" onclick="filterMapCafes('울주군', this)">울주군</button>
+            </div>
+
+            <!-- 카페 목록 -->
+            <div class="cafe-list-panel custom-scroll" id="cafe-list-panel"></div>
+          </div>
+
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- RANKING -->
+  <section id="ranking">
+    <div class="inner-scroll-container">
+      <div class="rank-flex-wrapper">
+        <div class="rank-flex">
+          <div class="rank-text-side">
+            <div class="section-label reveal">03 / SELECTION</div>
+            <h2 class="section-title reveal">이번 달,<br>숨은 카페 랭킹</h2>
+          </div>
+          <div class="rank-list-side custom-scroll reveal" id="rank-list">
+            <div class="rank-item" onclick="openCafeDetail('백림 베이커리')"><span class="rank-num">01/</span><div class="rank-name">백림 베이커리 (삼산점) <span>→</span></div></div>
+            <div class="rank-item" onclick="openCafeDetail('카페 온그린')"><span class="rank-num">02/</span><div class="rank-name">카페 온그린 (신정동) <span>→</span></div></div>
+            <div class="rank-item" onclick="openCafeDetail('라메르판지')"><span class="rank-num">03/</span><div class="rank-name">라메르판지 (정자항) <span>→</span></div></div>
+            <div class="rank-item" onclick="openCafeDetail('콜프로스터스')"><span class="rank-num">04/</span><div class="rank-name">콜프로스터스 (성남동) <span>→</span></div></div>
+            <div class="rank-item" onclick="openCafeDetail('메이즈메이즈')"><span class="rank-num">05/</span><div class="rank-name">메이즈메이즈 (삼산동) <span>→</span></div></div>
+            <div class="rank-item" onclick="openCafeDetail('카페 코이')"><span class="rank-num">06/</span><div class="rank-name">카페 코이 (태화동) <span>→</span></div></div>
+            <div class="rank-item" onclick="openCafeDetail('농도')"><span class="rank-num">07/</span><div class="rank-name">농도 (서생면) <span>→</span></div></div>
+            <div class="rank-item" onclick="openCafeDetail('어라운드스터디카페')"><span class="rank-num">08/</span><div class="rank-name">어라운드스터디카페 (천곡점) <span>→</span></div></div>
+            <div class="rank-item" onclick="openCafeDetail('해월당')"><span class="rank-num">09/</span><div class="rank-name">해월당 (울산대점) <span>→</span></div></div>
+          </div>
+        </div>
+      </div>
+      
+      <footer>
+        <div class="container">
+          <div class="footer-bottom">
+            <div>© UL. ULSAN ARCHIVE PROJECT.</div>
+            <div>DEPT. OF DIGITAL CONTENT DESIGN / ULSAN UNIVERSITY</div>
+          </div>
+        </div>
+      </footer>
+    </div>
+  </section>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+<script>
+  /* ===========================
+     울산 카페 데이터 (좌표 포함)
+  =========================== */
+  const ulsanCafes = [
+    { name: "해월당", sub: "무거동 · 울산대점", district: "남구", mood: "힐링", lat: 35.5441, lng: 129.2627, addr: "울산광역시 남구 대학로 93",
+      hours: "09:00 – 22:00", tel: "052-000-0001",
+      tags: ["우드인테리어", "넓은좌석", "콘센트있음", "따뜻한분위기"],
+      menu: [
+        { name: "아메리카노", price: "3,500" }, { name: "카페라테", price: "4,500" },
+        { name: "바닐라라테", price: "5,000" }, { name: "카푸치노", price: "5,000" },
+        { name: "크로플", price: "5,500" }, { name: "초코케이크", price: "6,500" }
+      ]
+    },
+    { name: "카페 온그린", sub: "신정동", district: "남구", mood: "조용한", lat: 35.5378, lng: 129.2751, addr: "울산광역시 남구 신정동",
+      hours: "09:00 – 21:00", tel: "052-000-0002",
+      tags: ["플랜테리어", "모던", "조용함", "1인석"],
+      menu: [
+        { name: "아메리카노", price: "4,000" }, { name: "바닐라라테", price: "6,000" },
+        { name: "그린 스무디", price: "7,000" }, { name: "크로플", price: "5,500" },
+        { name: "아이스티", price: "5,500" }, { name: "레몬에이드", price: "6,000" }
+      ]
+    },
+    { name: "컴포즈커피", sub: "삼산동", district: "남구", mood: "조용한", lat: 35.5396, lng: 129.3352, addr: "울산광역시 남구 삼산동",
+      hours: "07:00 – 23:00", tel: "052-000-0003",
+      tags: ["가성비", "테이크아웃", "접근성좋음"],
+      menu: [
+        { name: "아이스 아메리카노", price: "2,000" }, { name: "달달구리 라테", price: "3,500" },
+        { name: "딸기라테", price: "4,000" }, { name: "초코프라페", price: "4,500" }
+      ]
+    },
+    { name: "메이즈메이즈", sub: "삼산동", district: "남구", mood: "감성", lat: 35.5370, lng: 129.3310, addr: "울산광역시 남구 삼산동",
+      hours: "11:00 – 21:00", tel: "052-000-0004",
+      tags: ["포토스팟", "아기자기", "디저트맛집", "감성카페"],
+      menu: [
+        { name: "미로 시그니처 라테", price: "7,500" }, { name: "플랫화이트", price: "6,000" },
+        { name: "마카롱 세트(5입)", price: "5,000" }, { name: "딸기 케이크", price: "7,500" },
+        { name: "아메리카노", price: "5,000" }, { name: "바스크 치즈케이크", price: "7,000" }
+      ]
+    },
+    { name: "백림 베이커리", sub: "삼산점", district: "남구", mood: "힐링", lat: 35.5358, lng: 129.3285, addr: "울산광역시 남구 삼산동",
+      hours: "08:00 – 21:00", tel: "052-000-0005",
+      tags: ["직접구운빵", "베이커리", "우드인테리어", "아침카페"],
+      menu: [
+        { name: "소금빵", price: "2,500" }, { name: "크림치즈 베이글", price: "4,500" },
+        { name: "아메리카노", price: "4,500" }, { name: "카페라테", price: "5,500" },
+        { name: "크루아상", price: "3,800" }, { name: "에그타르트", price: "3,500" }
+      ]
+    },
+    { name: "프랭크커핀바", sub: "삼산동", district: "남구", mood: "조용한", lat: 35.5412, lng: 129.3330, addr: "울산광역시 남구 삼산동",
+      hours: "10:00 – 22:00", tel: "052-000-0006",
+      tags: ["스페셜티", "바리스타카페", "모던"],
+      menu: [
+        { name: "시그니처 핸드드립", price: "8,000" }, { name: "에스프레소", price: "4,000" },
+        { name: "카푸치노", price: "6,500" }, { name: "아메리카노", price: "5,000" }
+      ]
+    },
+    { name: "블랙업커피", sub: "달동", district: "남구", mood: "작업", lat: 35.5450, lng: 129.3290, addr: "울산광역시 남구 달동",
+      hours: "09:00 – 22:00", tel: "052-000-0007",
+      tags: ["작업카페", "조용함", "넓은좌석"],
+      menu: [
+        { name: "블랙 아메리카노", price: "4,500" }, { name: "흑임자 라테", price: "6,500" },
+        { name: "치즈케이크", price: "6,000" }, { name: "카페라테", price: "5,500" }
+      ]
+    },
+    { name: "이디야커피", sub: "울산대점", district: "남구", mood: "스터디", lat: 35.5430, lng: 129.2660, addr: "울산광역시 남구 대학로",
+      hours: "07:30 – 23:00", tel: "052-000-0009",
+      tags: ["작업카페", "콘센트많음", "가성비"],
+      menu: [
+        { name: "아이스 아메리카노", price: "3,500" }, { name: "카페라테", price: "4,000" },
+        { name: "바닐라라테", price: "4,500" }, { name: "머핀", price: "3,000" }
+      ]
+    },
+    { name: "싱물원", sub: "무거동", district: "남구", mood: "자연", lat: 35.5422, lng: 129.2700, addr: "울산광역시 남구 무거동",
+      hours: "11:00 – 20:00", tel: "052-000-0010",
+      tags: ["식물카페", "아기자기", "힐링", "포토스팟"],
+      menu: [
+        { name: "식물수 라테", price: "7,000" }, { name: "말차 케이크", price: "6,500" },
+        { name: "허브 티", price: "6,000" }, { name: "아메리카노", price: "4,500" }
+      ]
+    },
+    { name: "카페 코이", sub: "태화동", district: "중구", mood: "인스타 감성", lat: 35.5692, lng: 129.3146, addr: "울산광역시 중구 태화동",
+      hours: "10:00 – 21:00", tel: "052-000-0011",
+      tags: ["감성", "포토스팟", "아기자기", "소품카페"],
+      menu: [
+        { name: "코이 시그니처 라테", price: "7,500" }, { name: "딸기 타르트", price: "6,500" },
+        { name: "레몬에이드", price: "6,000" }, { name: "아메리카노", price: "5,000" }
+      ]
+    },
+    { name: "콜프로스터스", sub: "성남동", district: "중구", mood: "빈티지", lat: 35.5670, lng: 129.3120, addr: "울산광역시 중구 성남동",
+      hours: "09:00 – 22:00", tel: "052-000-0012",
+      tags: ["스페셜티", "로스터리", "원도심", "우드"],
+      menu: [
+        { name: "콜드브루", price: "7,000" }, { name: "싱글오리진 드립", price: "8,500" },
+        { name: "아메리카노", price: "5,000" }, { name: "스콘", price: "4,000" }
+      ]
+    },
+    { name: "히피온더로드", sub: "옥교동", district: "중구", mood: "빈티지", lat: 35.5660, lng: 129.3135, addr: "울산광역시 중구 옥교동",
+      hours: "11:00 – 21:00", tel: "052-000-0014",
+      tags: ["빈티지", "레트로", "감성", "골목카페"],
+      menu: [
+        { name: "히피 라테", price: "7,000" }, { name: "빈티지 케이크", price: "6,500" },
+        { name: "아이스티", price: "5,500" }, { name: "아메리카노", price: "5,000" }
+      ]
+    },
+    { name: "어라운드스터디카페", sub: "천곡점", district: "동구", mood: "스터디", lat: 35.5050, lng: 129.4160, addr: "울산광역시 동구 천곡동",
+      hours: "08:00 – 24:00", tel: "052-000-0015",
+      tags: ["독립좌석", "스터디전용", "콘센트100%", "무제한이용"],
+      menu: [
+        { name: "아메리카노", price: "2,000" }, { name: "카페라테", price: "3,000" },
+        { name: "음료 무한리필권(1일)", price: "4,000" }, { name: "바닐라라테", price: "3,500" }
+      ]
+    },
+    { name: "카페 더웨이브", sub: "일산해수욕장", district: "동구", mood: "인스타 감성", lat: 35.5268, lng: 129.4296, addr: "울산광역시 동구 일산동",
+      hours: "10:00 – 22:00", tel: "052-000-0016",
+      tags: ["오션뷰", "대형카페", "테라스", "일산해수욕장"],
+      menu: [
+        { name: "웨이브 시그니처 라테", price: "8,000" }, { name: "블루라군 에이드", price: "7,500" },
+        { name: "아메리카노", price: "5,000" }, { name: "시그니처 케이크", price: "7,000" }
+      ]
+    },
+    { name: "오션뷰카페", sub: "방어진", district: "동구", mood: "인스타 감성", lat: 35.4850, lng: 129.4230, addr: "울산광역시 동구 방어동",
+      hours: "10:00 – 21:00", tel: "052-000-0017",
+      tags: ["오션뷰", "일몰맛집", "방어진항"],
+      menu: [
+        { name: "바다뷰 라테", price: "8,500" }, { name: "수제 레몬에이드", price: "7,000" },
+        { name: "아메리카노", price: "5,500" }, { name: "카페라테", price: "6,500" }
+      ]
+    },
+    { name: "라메르판지", sub: "정자항", district: "북구", mood: "인스타 감성", lat: 35.6095, lng: 129.4105, addr: "울산광역시 북구 정자동",
+      hours: "10:00 – 22:00", tel: "052-000-0018",
+      tags: ["오션뷰", "루프탑", "대형카페", "정자항명소"],
+      menu: [
+        { name: "라메르 시그니처", price: "9,000" }, { name: "망고 스무디", price: "8,000" },
+        { name: "에그타르트", price: "4,500" }, { name: "아이스 라테", price: "6,500" }
+      ]
+    },
+    { name: "카페 숲길", sub: "중산동", district: "북구", mood: "자연", lat: 35.6120, lng: 129.3480, addr: "울산광역시 북구 중산동",
+      hours: "10:00 – 20:00", tel: "052-000-0019",
+      tags: ["숲속카페", "자연", "힐링", "드라이브코스"],
+      menu: [
+        { name: "숲길 라테", price: "7,000" }, { name: "녹차 빙수", price: "10,000" },
+        { name: "수제 쿠키", price: "3,500" }, { name: "아메리카노", price: "5,000" }
+      ]
+    },
+    { name: "농도", sub: "서생면", district: "울주군", mood: "자연", lat: 35.3780, lng: 129.3520, addr: "울산광역시 울주군 서생면",
+      hours: "10:00 – 19:00", tel: "052-000-0020",
+      tags: ["농가카페", "자연속", "텃밭", "힐링"],
+      menu: [
+        { name: "농도 블렌드 드립", price: "7,500" }, { name: "제철 과일 티", price: "8,000" },
+        { name: "수제 잼 토스트", price: "6,000" }, { name: "아메리카노", price: "5,000" }
+      ]
+    },
+    { name: "이너리트", sub: "온양읍", district: "울주군", mood: "인스타 감성", lat: 35.4080, lng: 129.2710, addr: "울산광역시 울주군 온양읍",
+      hours: "10:00 – 21:00", tel: "052-000-0021",
+      tags: ["오션뷰", "대형카페", "감성", "드라이브"],
+      menu: [
+        { name: "이너리트 라테", price: "8,500" }, { name: "계절 시그니처 음료", price: "8,000" },
+        { name: "수제 케이크", price: "7,500" }, { name: "아메리카노", price: "5,500" }
+      ]
+    },
+    { name: "카페 시골", sub: "언양읍", district: "울주군", mood: "힐링", lat: 35.5672, lng: 129.1856, addr: "울산광역시 울주군 언양읍",
+      hours: "09:00 – 20:00", tel: "052-000-0022",
+      tags: ["한옥분위기", "시골감성", "언양", "전통디저트"],
+      menu: [
+        { name: "시골 아메리카노", price: "5,000" }, { name: "쑥 라테", price: "7,000" },
+        { name: "한과 세트", price: "6,500" }, { name: "인절미 와플", price: "7,500" }
+      ]
+    },
+  ];
+  /* ===========================
+     Leaflet 지도 초기화
+  =========================== */
+  // Access blocked 전역 유틸 함수
+  function hideAccessBlocked(mapEl) {
+    const hide = () => {
+      mapEl.querySelectorAll('iframe, .leaflet-tile-error').forEach(el => el.style.display = 'none');
+      mapEl.childNodes.forEach(el => {
+        if (el.nodeType === 1 &&
+            !el.classList.contains('leaflet-pane') &&
+            !el.classList.contains('leaflet-control-container') &&
+            el.id !== 'ulsan-mask-svg') {
+          el.style.display = 'none';
+        }
+      });
+    };
+    hide();
+    setTimeout(hide, 300);
+    setTimeout(hide, 800);
+    setTimeout(hide, 2000);
+    new MutationObserver(hide).observe(mapEl, { childList: true, subtree: true });
+  }
+
+    let map, markersLayer = [];
+  let activePopupCafe = null;
+
+  function initMap() {
+    const ulsanBounds = L.latLngBounds(
+      [35.28, 129.05],
+      [35.72, 129.55]
+    );
+
+    map = L.map('ulsan-map', {
+      center: [35.4900, 129.2900],
+      zoom: 11,
+      zoomControl: true,
+      scrollWheelZoom: true,
+      maxBounds: ulsanBounds,
+      maxBoundsViscosity: 1.0,
+      minZoom: 11,
+      maxZoom: 17
+    });
+
+    // OpenStreetMap 타일
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      attribution: '© OSM',
+      maxZoom: 19,
+      errorTileUrl: 'data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7'
+    }).addTo(map);
+
+    // 울산 경계 좌표 (lat/lng)
+    const ulsanShape = [
+      [35.7100, 129.1300],[35.7050, 129.1700],[35.6950, 129.2100],
+      [35.6800, 129.2500],[35.6650, 129.2900],[35.6500, 129.3200],
+      [35.6350, 129.3600],[35.6200, 129.3900],[35.6100, 129.4200],
+      [35.5950, 129.4500],[35.5750, 129.4700],[35.5500, 129.4800],
+      [35.5250, 129.4780],[35.5000, 129.4700],[35.4750, 129.4600],
+      [35.4500, 129.4500],[35.4250, 129.4350],[35.4000, 129.4150],
+      [35.3750, 129.3900],[35.3500, 129.3600],[35.3250, 129.3300],
+      [35.3000, 129.3000],[35.2800, 129.2700],[35.2700, 129.2400],
+      [35.2650, 129.2100],[35.2700, 129.1800],[35.2800, 129.1500],
+      [35.3000, 129.1300],[35.3300, 129.1100],[35.3600, 129.0950],
+      [35.3900, 129.0850],[35.4200, 129.0800],[35.4500, 129.0750],
+      [35.4800, 129.0700],[35.5100, 129.0700],[35.5400, 129.0750],
+      [35.5700, 129.0850],[35.6000, 129.0950],[35.6300, 129.1050],
+      [35.6600, 129.1150],[35.6900, 129.1250],[35.7100, 129.1300]
+    ];
+
+    // 울산 경계선 표시
+    L.polygon(ulsanShape, {
+      color: '#B8D4E3',
+      weight: 2,
+      fillOpacity: 0,
+      interactive: false,
+      dashArray: '4 6'
+    }).addTo(map);
+
+    // --- SVG clipPath 방식: 지도 위에 고정된 흰색 마스크 오버레이 ---
+    // 지도가 움직여도 항상 울산 외부를 흰색으로 가림
+    function updateMaskOverlay() {
+      const container = document.getElementById('ulsan-map');
+      let svg = document.getElementById('ulsan-mask-svg');
+      if (!svg) {
+        svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+        svg.id = 'ulsan-mask-svg';
+        svg.style.cssText = 'position:absolute;top:0;left:0;width:100%;height:100%;pointer-events:none;z-index:400;overflow:hidden;';
+        container.appendChild(svg);
+      }
+
+      const W = container.offsetWidth;
+      const H = container.offsetHeight;
+
+      // lat/lng → 픽셀 변환
+      const pts = ulsanShape.map(([lat, lng]) => {
+        const p = map.latLngToContainerPoint([lat, lng]);
+        return `${p.x},${p.y}`;
+      }).join(' ');
+
+      // blur filter id
+      svg.innerHTML = `
+        <defs>
+          <filter id="edge-blur" x="-15%" y="-15%" width="130%" height="130%">
+            <feGaussianBlur stdDeviation="22"/>
+          </filter>
+          <mask id="blur-mask">
+            <rect width="${W}" height="${H}" fill="white"/>
+            <polygon points="${pts}" fill="black" filter="url(#edge-blur)"/>
+          </mask>
+        </defs>
+        <rect width="${W}" height="${H}" fill="white" mask="url(#blur-mask)"/>
+      `;
+    }
+
+    // 지도 이동/줌 때마다 마스크 업데이트
+    map.on('move zoom moveend zoomend', updateMaskOverlay);
+    map.whenReady(() => { setTimeout(updateMaskOverlay, 100); });
+
+    hideAccessBlocked(document.getElementById('ulsan-map'));
+
+    renderMarkers('전체');
+    renderCafeList('전체');
+  }
+
+  // 커스텀 마커 아이콘 — 크고 선명하게
+  function makeIcon(color) {
+    return L.divIcon({
+      html: `<div style="position:relative;width:32px;height:38px;">
+        <!-- 핀 모양 -->
+        <div style="
+          position:absolute;top:0;left:50%;
+          transform:translateX(-50%);
+          width:26px;height:26px;
+          background:${color};
+          border:3px solid #fff;
+          border-radius:50% 50% 50% 0;
+          transform:translateX(-50%) rotate(-45deg);
+          box-shadow:0 3px 12px rgba(0,0,0,0.35);
+          z-index:2;
+        "></div>
+        <!-- 핀 중심 흰 점 -->
+        <div style="
+          position:absolute;top:6px;left:50%;
+          transform:translateX(-50%);
+          width:10px;height:10px;
+          background:#fff;
+          border-radius:50%;
+          z-index:3;
+          opacity:0.9;
+        "></div>
+        <!-- 그림자 -->
+        <div style="
+          position:absolute;bottom:0;left:50%;
+          transform:translateX(-50%);
+          width:12px;height:4px;
+          background:rgba(0,0,0,0.2);
+          border-radius:50%;
+          z-index:1;
+        "></div>
+        <!-- 펄스 애니메이션 -->
+        <div style="
+          position:absolute;top:50%;left:50%;
+          transform:translate(-50%,-65%);
+          width:36px;height:36px;
+          background:${color};
+          border-radius:50%;
+          opacity:0.15;
+          animation:markerPulse 2s infinite;
+          z-index:0;
+        "></div>
+      </div>`,
+      className: '',
+      iconSize: [32, 38],
+      iconAnchor: [16, 38],
+      popupAnchor: [0, -42]
+    });
+  }
+
+  const districtColors = {
+    '남구': '#C0392B',
+    '중구': '#E74C3C',
+    '동구': '#E8624A',
+    '북구': '#D45A5A',
+    '울주군': '#F1948A'
+  };
+
+  function renderMarkers(district) {
+    // 기존 마커 제거
+    markersLayer.forEach(m => map.removeLayer(m));
+    markersLayer = [];
+
+    const filtered = district === '전체' ? ulsanCafes : ulsanCafes.filter(c => c.district === district);
+
+    filtered.forEach((cafe, idx) => {
+      const color = districtColors[cafe.district] || '#1A3C5A';
+      const marker = L.marker([cafe.lat, cafe.lng], { icon: makeIcon(color) }).addTo(map);
+
+      const popupHtml = `
+        <div class="cafe-popup">
+          <div class="cafe-popup-badge">${cafe.district.toUpperCase()} · CAFE</div>
+          <div class="cafe-popup-name">${cafe.name}</div>
+          <div class="cafe-popup-addr">${cafe.addr}</div>
+          <div class="cafe-popup-tags">
+            <span class="cafe-popup-tag">${cafe.district}</span>
+          </div>
+          <button class="cafe-popup-btn" onclick="openCafeDetail('${cafe.name}')">상세 정보 보기 →</button>
+        </div>
+      `;
+      marker.bindPopup(popupHtml, { maxWidth: 260, minWidth: 220 });
+
+      // 마커 hover 효과
+      marker.on('mouseover', function() { this.openPopup(); });
+      marker.on('click', function() {
+        highlightCafeListItem(cafe.name);
+        openCafeDetail(cafe.name);
+      });
+
+      markersLayer.push(marker);
+    });
+
+    // 필터링된 카페에 맞게 지도 범위 조정
+    if (filtered.length > 0) {
+      const bounds = L.latLngBounds(filtered.map(c => [c.lat, c.lng]));
+      map.fitBounds(bounds, { padding: [40, 40], maxZoom: 14 });
+    }
+  }
+
+  function renderCafeList(district) {
+    const panel = document.getElementById('cafe-list-panel');
+    const filtered = district === '전체' ? ulsanCafes : ulsanCafes.filter(c => c.district === district);
+    panel.innerHTML = filtered.map(cafe => `
+      <div class="cafe-list-item" id="cafe-item-${cafe.name.replace(/\s/g,'')}" onclick="focusCafeOnMap('${cafe.name}', ${cafe.lat}, ${cafe.lng})">
+        <div class="cafe-list-dot" style="background:${districtColors[cafe.district] || '#B8D4E3'}"></div>
+        <div class="cafe-list-text">
+          <div class="cafe-list-name">${cafe.name}</div>
+          <div class="cafe-list-sub">${cafe.sub}</div>
+        </div>
+        <span class="cafe-list-arrow">→</span>
+      </div>
+    `).join('');
+  }
+
+  function filterMapCafes(district, btn) {
+    // 버튼 활성화 토글
+    document.querySelectorAll('.map-filter-btn').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    renderMarkers(district);
+    renderCafeList(district);
+  }
+
+  function focusCafe(name, lat, lng) {
+    map.setView([lat, lng], 16, { animate: true, duration: 0.8 });
+    markersLayer.forEach(m => {
+      if (Math.abs(m.getLatLng().lat - lat) < 0.0001 && Math.abs(m.getLatLng().lng - lng) < 0.0001) {
+        setTimeout(() => m.openPopup(), 500);
+      }
+    });
+    highlightCafeListItem(name);
+  }
+
+  // 사이드 목록 클릭 전용 - 지도에서 위치만 보여줌 (상세 화면 안 열림)
+  function focusCafeOnMap(name, lat, lng) {
+    map.setView([lat, lng], 16, { animate: true, duration: 0.8 });
+    markersLayer.forEach(m => {
+      if (Math.abs(m.getLatLng().lat - lat) < 0.0001 && Math.abs(m.getLatLng().lng - lng) < 0.0001) {
+        setTimeout(() => m.openPopup(), 500);
+      }
+    });
+    highlightCafeListItem(name);
+  }
+
+  function highlightCafeListItem(name) {
+    document.querySelectorAll('.cafe-list-item').forEach(el => el.classList.remove('highlighted'));
+    const el = document.getElementById('cafe-item-' + name.replace(/\s/g,''));
+    if (el) {
+      el.classList.add('highlighted');
+      el.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    }
+  }
+
+  /* ===========================
+     기존 JS 그대로 유지
+  =========================== */
+  let currentIdx = 0;
+  const sections = document.querySelectorAll('section');
+  const wrapper = document.getElementById('main-wrapper');
+  let isScrolling = false;
+  let mapInitialized = false;
+
+  const overlay = document.getElementById('search-overlay');
+  const randomContainer = document.getElementById('random-cafe-container');
+  
+  const cafeData = [
+    // ── 남구 ──────────────────────────────────────────────────────
+    { name: "해월당",               loc: "남구",   mood: "힐링",   score: 4.3, img: "https://images.unsplash.com/photo-1521017432531-fbd92d768814?w=500" },
+    { name: "카페 온그린",          loc: "남구",   mood: "조용한",     score: 4.1, img: "https://images.unsplash.com/photo-1453614512568-c4024d13c247?w=500" },
+    { name: "컴포즈커피 삼산",      loc: "남구",   mood: "조용한",     score: 3.9, img: "https://images.unsplash.com/photo-1509042239860-f550ce710b93?w=500" },
+    { name: "메이즈메이즈",         loc: "남구",   mood: "감성",    score: 4.5, img: "https://images.unsplash.com/photo-1543353071-087092ec393a?w=500" },
+    { name: "백림 베이커리",        loc: "남구",   mood: "힐링",   score: 4.6, img: "https://images.unsplash.com/photo-1534040385115-33dcb3acba5b?w=500" },
+    { name: "프랭크커핀바",         loc: "남구",   mood: "조용한",     score: 4.2, img: "https://images.unsplash.com/photo-1495474472287-4d71bcdd2085?w=500" },
+    { name: "블랙업커피",           loc: "남구",   mood: "조용한",     score: 4.0, img: "https://images.unsplash.com/photo-1511920170033-f8396924c348?w=500" },
+    { name: "이디야커피 울산대",    loc: "남구",   mood: "작업",  score: 3.7, img: "https://images.unsplash.com/photo-1506619216599-9d16d0903dfd?w=500" },
+    { name: "싱물원",               loc: "남구",   mood: "감성",    score: 4.6, img: "https://images.unsplash.com/photo-1466637574441-749b8f19452f?w=500" },
+    { name: "투썸플레이스 삼산",    loc: "남구",   mood: "힐링",   score: 4.0, img: "https://images.unsplash.com/photo-1525610553991-2bede1a236e2?w=500" },
+    { name: "스타벅스 삼산점",      loc: "남구",   mood: "조용한",     score: 4.1, img: "https://images.unsplash.com/photo-1470753937643-efeb931202a9?w=500" },
+    { name: "할리스 달동점",        loc: "남구",   mood: "조용한",     score: 3.9, img: "https://images.unsplash.com/photo-1456324504439-367cee3b3c32?w=500" },
+    { name: "폴 바셋 삼산",         loc: "남구",   mood: "조용한",     score: 4.2, img: "https://images.unsplash.com/photo-1463797221720-6b07e6426c24?w=500" },
+    { name: "카페 봄봄",            loc: "남구",   mood: "감성",    score: 4.4, img: "https://images.unsplash.com/photo-1554118811-1e0d58224f24?w=500" },
+    { name: "오월의 종",            loc: "남구",   mood: "힐링",   score: 4.5, img: "https://images.unsplash.com/photo-1514432324607-a09d9b4aefdd?w=500" },
+    { name: "하루이틀",             loc: "남구",   mood: "감성",    score: 4.3, img: "https://images.unsplash.com/photo-1559496417-e7f25cb247f3?w=500" },
+    { name: "더 로스터리",          loc: "남구",   mood: "조용한",     score: 4.5, img: "https://images.unsplash.com/photo-1509042239860-f550ce710b93?w=500" },
+    { name: "브라운핸즈 울산",      loc: "남구",   mood: "힐링",   score: 4.6, img: "https://images.unsplash.com/photo-1534040385115-33dcb3acba5b?w=500" },
+    { name: "감성다방",             loc: "남구",   mood: "힐링",   score: 4.4, img: "https://images.unsplash.com/photo-1495474472287-4d71bcdd2085?w=500" },
+    { name: "카페 유자",            loc: "남구",   mood: "감성",    score: 4.3, img: "https://images.unsplash.com/photo-1543353071-087092ec393a?w=500" },
+    { name: "카페 티라미수",        loc: "남구",   mood: "감성",    score: 4.2, img: "https://images.unsplash.com/photo-1521017432531-fbd92d768814?w=500" },
+    { name: "스터디빈 삼산",        loc: "남구",   mood: "작업",  score: 4.1, img: "https://images.unsplash.com/photo-1506619216599-9d16d0903dfd?w=500" },
+    { name: "카페네 달동",          loc: "남구",   mood: "조용한",     score: 3.8, img: "https://images.unsplash.com/photo-1511920170033-f8396924c348?w=500" },
+    { name: "카페 모노",            loc: "남구",   mood: "조용한",     score: 4.3, img: "https://images.unsplash.com/photo-1453614512568-c4024d13c247?w=500" },
+    { name: "디저트 39",            loc: "남구",   mood: "감성",    score: 4.5, img: "https://images.unsplash.com/photo-1554118811-1e0d58224f24?w=500" },
+    { name: "이클 커피",            loc: "남구",   mood: "조용한",     score: 4.2, img: "https://images.unsplash.com/photo-1466637574441-749b8f19452f?w=500" },
+    { name: "남산 커피",            loc: "남구",   mood: "힐링",   score: 4.0, img: "https://images.unsplash.com/photo-1521017432531-fbd92d768814?w=500" },
+    { name: "커피스미스 삼산",      loc: "남구",   mood: "조용한",     score: 4.1, img: "https://images.unsplash.com/photo-1509042239860-f550ce710b93?w=500" },
+    { name: "카페 무",              loc: "남구",   mood: "조용한",     score: 4.3, img: "https://images.unsplash.com/photo-1463797221720-6b07e6426c24?w=500" },
+    { name: "루프탑 커피 남구",     loc: "남구",   mood: "인스타 감성",   score: 4.4, img: "https://images.unsplash.com/photo-1507525428034-b723cf961d3e?w=500" },
+    { name: "어반 로스터스",        loc: "남구",   mood: "조용한",     score: 4.5, img: "https://images.unsplash.com/photo-1495474472287-4d71bcdd2085?w=500" },
+    { name: "카페 달빛",            loc: "남구",   mood: "감성",    score: 4.4, img: "https://images.unsplash.com/photo-1543353071-087092ec393a?w=500" },
+    { name: "포레스트 커피",        loc: "남구",   mood: "힐링",   score: 4.3, img: "https://images.unsplash.com/photo-1514432324607-a09d9b4aefdd?w=500" },
+    { name: "드립앤무드",           loc: "남구",   mood: "조용한",     score: 4.2, img: "https://images.unsplash.com/photo-1453614512568-c4024d13c247?w=500" },
+    { name: "카페 선물",            loc: "남구",   mood: "감성",    score: 4.5, img: "https://images.unsplash.com/photo-1559496417-e7f25cb247f3?w=500" },
+    { name: "제이빈 커피",          loc: "남구",   mood: "조용한",     score: 4.0, img: "https://images.unsplash.com/photo-1511920170033-f8396924c348?w=500" },
+    { name: "카페 여름날",          loc: "남구",   mood: "감성",    score: 4.4, img: "https://images.unsplash.com/photo-1554118811-1e0d58224f24?w=500" },
+    { name: "무거동 커피연구소",    loc: "남구",   mood: "조용한",     score: 4.3, img: "https://images.unsplash.com/photo-1466637574441-749b8f19452f?w=500" },
+    { name: "빈티지 커피 달동",     loc: "남구",   mood: "힐링",   score: 4.2, img: "https://images.unsplash.com/photo-1521017432531-fbd92d768814?w=500" },
+    { name: "카페 천천히",          loc: "남구",   mood: "힐링",   score: 4.6, img: "https://images.unsplash.com/photo-1534040385115-33dcb3acba5b?w=500" },
+    { name: "삼산 브루잉",          loc: "남구",   mood: "조용한",     score: 4.1, img: "https://images.unsplash.com/photo-1495474472287-4d71bcdd2085?w=500" },
+    { name: "카페 마당",            loc: "남구",   mood: "감성",    score: 4.3, img: "https://images.unsplash.com/photo-1543353071-087092ec393a?w=500" },
+    { name: "커피 한 잔",           loc: "남구",   mood: "힐링",   score: 4.4, img: "https://images.unsplash.com/photo-1514432324607-a09d9b4aefdd?w=500" },
+    { name: "스터디카페 공간",      loc: "남구",   mood: "작업",  score: 4.0, img: "https://images.unsplash.com/photo-1506619216599-9d16d0903dfd?w=500" },
+    { name: "카페 베란다",          loc: "남구",   mood: "감성",    score: 4.5, img: "https://images.unsplash.com/photo-1559496417-e7f25cb247f3?w=500" },
+    // ── 중구 ──────────────────────────────────────────────────────
+    { name: "카페 코이",            loc: "중구",   mood: "감성",    score: 4.7, img: "https://images.unsplash.com/photo-1497935586351-b67a49e012bf?w=500" },
+    { name: "콜프로스터스",         loc: "중구",   mood: "힐링",   score: 4.4, img: "https://images.unsplash.com/photo-1559496417-e7f25cb247f3?w=500" },
+    { name: "히피온더로드",         loc: "중구",   mood: "조용한",     score: 4.3, img: "https://images.unsplash.com/photo-1525610553991-2bede1a236e2?w=500" },
+    { name: "스타벅스 성남점",      loc: "중구",   mood: "조용한",     score: 4.0, img: "https://images.unsplash.com/photo-1470753937643-efeb931202a9?w=500" },
+    { name: "투썸플레이스 중구",    loc: "중구",   mood: "힐링",   score: 3.9, img: "https://images.unsplash.com/photo-1511920170033-f8396924c348?w=500" },
+    { name: "카페 태화",            loc: "중구",   mood: "힐링",   score: 4.2, img: "https://images.unsplash.com/photo-1514432324607-a09d9b4aefdd?w=500" },
+    { name: "원도심 커피",          loc: "중구",   mood: "조용한",     score: 4.4, img: "https://images.unsplash.com/photo-1453614512568-c4024d13c247?w=500" },
+    { name: "달달커피",             loc: "중구",   mood: "감성",    score: 4.1, img: "https://images.unsplash.com/photo-1521017432531-fbd92d768814?w=500" },
+    { name: "카페 성안",            loc: "중구",   mood: "힐링",   score: 4.3, img: "https://images.unsplash.com/photo-1554118811-1e0d58224f24?w=500" },
+    { name: "브루잉 스튜디오",      loc: "중구",   mood: "조용한",     score: 4.5, img: "https://images.unsplash.com/photo-1466637574441-749b8f19452f?w=500" },
+    { name: "카페 고래",            loc: "중구",   mood: "감성",    score: 4.4, img: "https://images.unsplash.com/photo-1456324504439-367cee3b3c32?w=500" },
+    { name: "봉황다방",             loc: "중구",   mood: "힐링",   score: 4.6, img: "https://images.unsplash.com/photo-1463797221720-6b07e6426c24?w=500" },
+    { name: "카페 마실",            loc: "중구",   mood: "감성",    score: 4.2, img: "https://images.unsplash.com/photo-1543353071-087092ec393a?w=500" },
+    { name: "태화강 뷰 카페",       loc: "중구",   mood: "인스타 감성",   score: 4.5, img: "https://images.unsplash.com/photo-1507525428034-b723cf961d3e?w=500" },
+    { name: "올드타운 커피",        loc: "중구",   mood: "힐링",   score: 4.3, img: "https://images.unsplash.com/photo-1534040385115-33dcb3acba5b?w=500" },
+    { name: "카페 수향",            loc: "중구",   mood: "감성",    score: 4.4, img: "https://images.unsplash.com/photo-1559496417-e7f25cb247f3?w=500" },
+    { name: "모멘트 커피",          loc: "중구",   mood: "조용한",     score: 4.2, img: "https://images.unsplash.com/photo-1495474472287-4d71bcdd2085?w=500" },
+    { name: "학성 커피하우스",      loc: "중구",   mood: "힐링",   score: 4.1, img: "https://images.unsplash.com/photo-1521017432531-fbd92d768814?w=500" },
+    { name: "소소한 커피",          loc: "중구",   mood: "감성",    score: 4.3, img: "https://images.unsplash.com/photo-1466637574441-749b8f19452f?w=500" },
+    { name: "카페 달항아리",        loc: "중구",   mood: "힐링",   score: 4.6, img: "https://images.unsplash.com/photo-1514432324607-a09d9b4aefdd?w=500" },
+    { name: "커피 공방",            loc: "중구",   mood: "조용한",     score: 4.4, img: "https://images.unsplash.com/photo-1453614512568-c4024d13c247?w=500" },
+    { name: "중구 로스터리",        loc: "중구",   mood: "조용한",     score: 4.3, img: "https://images.unsplash.com/photo-1509042239860-f550ce710b93?w=500" },
+    { name: "카페 목련",            loc: "중구",   mood: "감성",    score: 4.4, img: "https://images.unsplash.com/photo-1554118811-1e0d58224f24?w=500" },
+    { name: "성남동 브루어리",      loc: "중구",   mood: "조용한",     score: 4.2, img: "https://images.unsplash.com/photo-1511920170033-f8396924c348?w=500" },
+    { name: "카페 나비",            loc: "중구",   mood: "감성",    score: 4.5, img: "https://images.unsplash.com/photo-1559496417-e7f25cb247f3?w=500" },
+    { name: "옥교동 커피",          loc: "중구",   mood: "힐링",   score: 4.1, img: "https://images.unsplash.com/photo-1534040385115-33dcb3acba5b?w=500" },
+    // ── 동구 ──────────────────────────────────────────────────────
+    { name: "어라운드스터디카페",   loc: "동구",   mood: "작업",  score: 4.2, img: "https://images.unsplash.com/photo-1456324504439-367cee3b3c32?w=500" },
+    { name: "카페 더웨이브",        loc: "동구",   mood: "인스타 감성",   score: 4.7, img: "https://images.unsplash.com/photo-1507525428034-b723cf961d3e?w=500" },
+    { name: "오션뷰카페",           loc: "동구",   mood: "인스타 감성",   score: 4.5, img: "https://images.unsplash.com/photo-1445116572660-236099ec97a0?w=500" },
+    { name: "일산 커피하우스",      loc: "동구",   mood: "인스타 감성",   score: 4.3, img: "https://images.unsplash.com/photo-1514432324607-a09d9b4aefdd?w=500" },
+    { name: "카페 항구",            loc: "동구",   mood: "인스타 감성",   score: 4.4, img: "https://images.unsplash.com/photo-1470753937643-efeb931202a9?w=500" },
+    { name: "방어진 커피",          loc: "동구",   mood: "힐링",   score: 4.1, img: "https://images.unsplash.com/photo-1559496417-e7f25cb247f3?w=500" },
+    { name: "카페 파도",            loc: "동구",   mood: "인스타 감성",   score: 4.6, img: "https://images.unsplash.com/photo-1497935586351-b67a49e012bf?w=500" },
+    { name: "이스트 브루",          loc: "동구",   mood: "조용한",     score: 4.2, img: "https://images.unsplash.com/photo-1525610553991-2bede1a236e2?w=500" },
+    { name: "카페 등대",            loc: "동구",   mood: "감성",    score: 4.5, img: "https://images.unsplash.com/photo-1554118811-1e0d58224f24?w=500" },
+    { name: "씨사이드 커피",        loc: "동구",   mood: "인스타 감성",   score: 4.4, img: "https://images.unsplash.com/photo-1507525428034-b723cf961d3e?w=500" },
+    { name: "스터디룸 동구",        loc: "동구",   mood: "작업",  score: 4.0, img: "https://images.unsplash.com/photo-1506619216599-9d16d0903dfd?w=500" },
+    { name: "카페 해돋이",          loc: "동구",   mood: "인스타 감성",   score: 4.5, img: "https://images.unsplash.com/photo-1445116572660-236099ec97a0?w=500" },
+    { name: "항구 로스터리",        loc: "동구",   mood: "조용한",     score: 4.3, img: "https://images.unsplash.com/photo-1495474472287-4d71bcdd2085?w=500" },
+    { name: "블루웨이브 카페",      loc: "동구",   mood: "인스타 감성",   score: 4.6, img: "https://images.unsplash.com/photo-1470753937643-efeb931202a9?w=500" },
+    { name: "카페 동백",            loc: "동구",   mood: "감성",    score: 4.2, img: "https://images.unsplash.com/photo-1543353071-087092ec393a?w=500" },
+    { name: "새벽 커피",            loc: "동구",   mood: "힐링",   score: 4.1, img: "https://images.unsplash.com/photo-1534040385115-33dcb3acba5b?w=500" },
+    { name: "동구 공방 카페",       loc: "동구",   mood: "감성",    score: 4.4, img: "https://images.unsplash.com/photo-1466637574441-749b8f19452f?w=500" },
+    { name: "브리즈 커피",          loc: "동구",   mood: "조용한",     score: 4.3, img: "https://images.unsplash.com/photo-1453614512568-c4024d13c247?w=500" },
+    { name: "카페 수평선",          loc: "동구",   mood: "인스타 감성",   score: 4.7, img: "https://images.unsplash.com/photo-1507525428034-b723cf961d3e?w=500" },
+    { name: "동구 베이크 카페",     loc: "동구",   mood: "힐링",   score: 4.2, img: "https://images.unsplash.com/photo-1521017432531-fbd92d768814?w=500" },
+    { name: "카페 조각",            loc: "동구",   mood: "감성",    score: 4.3, img: "https://images.unsplash.com/photo-1559496417-e7f25cb247f3?w=500" },
+    { name: "일산해변 커피",        loc: "동구",   mood: "인스타 감성",   score: 4.5, img: "https://images.unsplash.com/photo-1445116572660-236099ec97a0?w=500" },
+    { name: "소금바람 카페",        loc: "동구",   mood: "인스타 감성",   score: 4.4, img: "https://images.unsplash.com/photo-1514432324607-a09d9b4aefdd?w=500" },
+    // ── 북구 ──────────────────────────────────────────────────────
+    { name: "라메르판지",           loc: "북구",   mood: "인스타 감성",   score: 4.8, img: "https://images.unsplash.com/photo-1554118811-1e0d58224f24?w=500" },
+    { name: "카페 숲길",            loc: "북구",   mood: "힐링",   score: 4.4, img: "https://images.unsplash.com/photo-1470753937643-efeb931202a9?w=500" },
+    { name: "정자항 커피",          loc: "북구",   mood: "인스타 감성",   score: 4.5, img: "https://images.unsplash.com/photo-1445116572660-236099ec97a0?w=500" },
+    { name: "카페 하늘",            loc: "북구",   mood: "감성",    score: 4.3, img: "https://images.unsplash.com/photo-1466637574441-749b8f19452f?w=500" },
+    { name: "노스 브루잉",          loc: "북구",   mood: "조용한",     score: 4.2, img: "https://images.unsplash.com/photo-1453614512568-c4024d13c247?w=500" },
+    { name: "카페 바람",            loc: "북구",   mood: "힐링",   score: 4.4, img: "https://images.unsplash.com/photo-1521017432531-fbd92d768814?w=500" },
+    { name: "뷰포인트 카페",        loc: "북구",   mood: "인스타 감성",   score: 4.6, img: "https://images.unsplash.com/photo-1507525428034-b723cf961d3e?w=500" },
+    { name: "아침 커피",            loc: "북구",   mood: "힐링",   score: 4.1, img: "https://images.unsplash.com/photo-1534040385115-33dcb3acba5b?w=500" },
+    { name: "카페 솔",              loc: "북구",   mood: "감성",    score: 4.3, img: "https://images.unsplash.com/photo-1543353071-087092ec393a?w=500" },
+    { name: "정자 비치 카페",       loc: "북구",   mood: "인스타 감성",   score: 4.7, img: "https://images.unsplash.com/photo-1445116572660-236099ec97a0?w=500" },
+    { name: "카페 청솔",            loc: "북구",   mood: "힐링",   score: 4.4, img: "https://images.unsplash.com/photo-1514432324607-a09d9b4aefdd?w=500" },
+    { name: "노을 카페",            loc: "북구",   mood: "인스타 감성",   score: 4.5, img: "https://images.unsplash.com/photo-1497935586351-b67a49e012bf?w=500" },
+    { name: "카페 산들",            loc: "북구",   mood: "힐링",   score: 4.2, img: "https://images.unsplash.com/photo-1559496417-e7f25cb247f3?w=500" },
+    { name: "북구 로스터스",        loc: "북구",   mood: "조용한",     score: 4.3, img: "https://images.unsplash.com/photo-1495474472287-4d71bcdd2085?w=500" },
+    { name: "카페 파란",            loc: "북구",   mood: "감성",    score: 4.4, img: "https://images.unsplash.com/photo-1554118811-1e0d58224f24?w=500" },
+    { name: "오션 테라스",          loc: "북구",   mood: "인스타 감성",   score: 4.6, img: "https://images.unsplash.com/photo-1470753937643-efeb931202a9?w=500" },
+    { name: "해안선 카페",          loc: "북구",   mood: "인스타 감성",   score: 4.5, img: "https://images.unsplash.com/photo-1507525428034-b723cf961d3e?w=500" },
+    { name: "북구 감성 카페",       loc: "북구",   mood: "감성",    score: 4.3, img: "https://images.unsplash.com/photo-1543353071-087092ec393a?w=500" },
+    { name: "카페 바다내음",        loc: "북구",   mood: "인스타 감성",   score: 4.4, img: "https://images.unsplash.com/photo-1445116572660-236099ec97a0?w=500" },
+    // ── 울주군 ────────────────────────────────────────────────────
+    { name: "농도",                 loc: "울주군", mood: "힐링",   score: 4.6, img: "https://images.unsplash.com/photo-1514432324607-a09d9b4aefdd?w=500" },
+    { name: "이너리트",             loc: "울주군", mood: "인스타 감성",   score: 4.5, img: "https://images.unsplash.com/photo-1445116572660-236099ec97a0?w=500" },
+    { name: "카페 시골",            loc: "울주군", mood: "힐링",   score: 4.3, img: "https://images.unsplash.com/photo-1463797221720-6b07e6426c24?w=500" },
+    { name: "언양 커피",            loc: "울주군", mood: "힐링",   score: 4.2, img: "https://images.unsplash.com/photo-1559496417-e7f25cb247f3?w=500" },
+    { name: "카페 들판",            loc: "울주군", mood: "힐링",   score: 4.4, img: "https://images.unsplash.com/photo-1521017432531-fbd92d768814?w=500" },
+    { name: "온양 브루어리",        loc: "울주군", mood: "조용한",     score: 4.3, img: "https://images.unsplash.com/photo-1495474472287-4d71bcdd2085?w=500" },
+    { name: "자연 카페",            loc: "울주군", mood: "힐링",   score: 4.5, img: "https://images.unsplash.com/photo-1470753937643-efeb931202a9?w=500" },
+    { name: "서생 뷰 카페",         loc: "울주군", mood: "인스타 감성",   score: 4.4, img: "https://images.unsplash.com/photo-1554118811-1e0d58224f24?w=500" },
+    { name: "울주 한옥 다방",       loc: "울주군", mood: "힐링",   score: 4.6, img: "https://images.unsplash.com/photo-1534040385115-33dcb3acba5b?w=500" },
+    { name: "카페 나루",            loc: "울주군", mood: "감성",    score: 4.1, img: "https://images.unsplash.com/photo-1543353071-087092ec393a?w=500" },
+    { name: "영남 알프스 카페",     loc: "울주군", mood: "인스타 감성",   score: 4.7, img: "https://images.unsplash.com/photo-1507525428034-b723cf961d3e?w=500" },
+    { name: "카페 솔숲",            loc: "울주군", mood: "힐링",   score: 4.4, img: "https://images.unsplash.com/photo-1466637574441-749b8f19452f?w=500" },
+    { name: "간절곶 커피",          loc: "울주군", mood: "인스타 감성",   score: 4.8, img: "https://images.unsplash.com/photo-1497935586351-b67a49e012bf?w=500" },
+    { name: "카페 고원",            loc: "울주군", mood: "힐링",   score: 4.3, img: "https://images.unsplash.com/photo-1456324504439-367cee3b3c32?w=500" },
+    { name: "천하절경 카페",        loc: "울주군", mood: "인스타 감성",   score: 4.6, img: "https://images.unsplash.com/photo-1470753937643-efeb931202a9?w=500" },
+    { name: "외고산 옹기 카페",     loc: "울주군", mood: "힐링",   score: 4.5, img: "https://images.unsplash.com/photo-1514432324607-a09d9b4aefdd?w=500" },
+    { name: "신불산 카페",          loc: "울주군", mood: "힐링",   score: 4.4, img: "https://images.unsplash.com/photo-1521017432531-fbd92d768814?w=500" },
+    { name: "카페 초원",            loc: "울주군", mood: "감성",    score: 4.2, img: "https://images.unsplash.com/photo-1554118811-1e0d58224f24?w=500" },
+    { name: "등억온천 커피",        loc: "울주군", mood: "힐링",   score: 4.1, img: "https://images.unsplash.com/photo-1534040385115-33dcb3acba5b?w=500" },
+    { name: "카페 목장",            loc: "울주군", mood: "힐링",   score: 4.5, img: "https://images.unsplash.com/photo-1495474472287-4d71bcdd2085?w=500" },
+    { name: "산골 로스터리",        loc: "울주군", mood: "조용한",     score: 4.3, img: "https://images.unsplash.com/photo-1453614512568-c4024d13c247?w=500" },
+    { name: "울주 들꽃 카페",       loc: "울주군", mood: "감성",    score: 4.4, img: "https://images.unsplash.com/photo-1559496417-e7f25cb247f3?w=500" },
+    { name: "온양 커피밭",          loc: "울주군", mood: "힐링",   score: 4.3, img: "https://images.unsplash.com/photo-1514432324607-a09d9b4aefdd?w=500" },
+    { name: "카페 둘레길",          loc: "울주군", mood: "힐링",   score: 4.5, img: "https://images.unsplash.com/photo-1466637574441-749b8f19452f?w=500" },
+    { name: "간절곶 선셋",          loc: "울주군", mood: "인스타 감성",   score: 4.7, img: "https://images.unsplash.com/photo-1507525428034-b723cf961d3e?w=500" },
+  ];
+
+  // 필터 상태
+  let activeDistrict = '전체';
+  let activeMood = '전체';
+
+  function openSearch(query) {
+    overlay.style.display = "flex";
+    switchTab('search');
+    if (query) {
+      const input = document.getElementById('overlay-search-input');
+      if (input) input.value = query;
+    }
+    filterOverlayCafes();
+  }
+
+  const distColors = { '남구':'#C0392B','중구':'#E74C3C','동구':'#E8624A','북구':'#D45A5A','울주군':'#F1948A' };
+
+  const moodMeta = {
+    '감성':       { icon: '🌸', desc: '감성 넘치는 포토제닉 카페' },
+    '힐링':       { icon: '🌿', desc: '포근하고 아늑한 힐링 공간' },
+    '인스타 감성':{ icon: '📸', desc: '감각적인 인스타 감성 뷰 카페' },
+    '자연':       { icon: '🌲', desc: '자연 속 힐링 카페' },
+    '작업':       { icon: '💻', desc: '노트북 작업하기 좋은 카페' },
+    '스터디':     { icon: '📚', desc: '조용하고 집중하기 좋은 스터디 카페' },
+    '빈티지':     { icon: '🕯️', desc: '레트로하고 개성 있는 빈티지 카페' },
+    '야간 감성':  { icon: '🌙', desc: '밤이 더 아름다운 감성 야경 카페' },
+    '컨셉':       { icon: '🎨', desc: '독특한 테마와 컨셉의 카페' },
+    '조용한':     { icon: '🤫', desc: '한적하고 조용한 분위기의 카페' },
+    '시끄러운':   { icon: '🎶', desc: '활기차고 에너지 넘치는 카페' },
+  };
+
+  function heroSearchLive(val) {
+    const dropdown = document.getElementById('hero-search-dropdown');
+    const q = val.trim().toLowerCase();
+
+    if (!q) { dropdown.classList.remove('show'); dropdown.innerHTML = ''; return; }
+
+    // 카페명 매칭
+    const cafeMatches = cafeData.filter(c =>
+      c.name.toLowerCase().includes(q) || c.loc.includes(q)
+    ).slice(0, 5);
+
+    // 분위기 키워드 매칭
+    const moodMatches = Object.entries(moodMeta).filter(([mood]) =>
+      mood.toLowerCase().includes(q) ||
+      Object.keys(moodKeywords).some(kw => kw.includes(q) && moodKeywords[kw] === mood)
+    );
+
+    let html = '';
+
+    if (cafeMatches.length > 0) {
+      html += `<div class="hsd-section-label">CAFES</div>`;
+      html += cafeMatches.map(c => `
+        <div class="hsd-item" onmousedown="selectHeroCafe('${c.name.replace(/'/g,"\'")}')">
+          <span class="hsd-dot" style="background:${distColors[c.loc]||'#C0392B'}"></span>
+          <span class="hsd-name">${c.name}</span>
+          <span class="hsd-sub">${c.loc}</span>
+        </div>`).join('');
+    }
+
+    if (moodMatches.length > 0) {
+      html += `<div class="hsd-section-label">MOOD</div>`;
+      html += moodMatches.map(([mood, meta]) => `
+        <div class="hsd-mood-chip" onmousedown="selectHeroMood('${mood}')">
+          <span class="hsd-mood-icon">${meta.icon}</span>
+          <span class="hsd-mood-name">${mood}</span>
+          <span class="hsd-mood-desc">${meta.desc}</span>
+        </div>`).join('');
+    }
+
+    if (!html) {
+      html = `<div class="hsd-empty">일치하는 카페나 분위기가 없어요</div>`;
+    }
+
+    dropdown.innerHTML = html;
+    dropdown.classList.add('show');
+  }
+
+  function selectHeroCafe(name) {
+    document.getElementById('hero-search-input').value = name;
+    closeHeroDropdown();
+    openSearch(name);
+  }
+
+  function selectHeroMood(mood) {
+    document.getElementById('hero-search-input').value = mood;
+    closeHeroDropdown();
+    // 분위기 필터로 탐색 오버레이 열기
+    overlay.style.display = 'flex';
+    switchTab('search');
+    activeDistrict = '전체'; activeMood = mood;
+    document.querySelectorAll('#district-filter-group .filter-btn').forEach(b => b.classList.remove('active'));
+    document.querySelector('#district-filter-group .filter-btn').classList.add('active');
+    document.querySelectorAll('#mood-filter-group .filter-btn').forEach(b => {
+      b.classList.remove('active');
+      if (b.textContent.trim() === mood) b.classList.add('active');
+    });
+    document.getElementById('overlay-search-input').value = '';
+    filterOverlayCafes();
+  }
+
+  function closeHeroDropdown() {
+    const d = document.getElementById('hero-search-dropdown');
+    if (d) { d.classList.remove('show'); }
+  }
+
+  function heroSearch() {
+    const raw = (document.getElementById('hero-search-input')?.value || '').trim();
+    if (!raw) { openSearch(''); return; }
+
+    const q = raw.toLowerCase();
+
+    // 1) 분위기 키워드 매핑 확인
+    const moodMap = {
+      '감성': '감성', '힐링': '힐링', '치유': '힐링',
+      '인스타': '인스타 감성', '인스타감성': '인스타 감성',
+      '자연': '자연', '숲': '자연', '식물': '자연',
+      '작업': '작업', '노트북': '작업', '집중': '작업',
+      '스터디': '스터디', '공부': '스터디',
+      '빈티지': '빈티지', '레트로': '빈티지',
+      '야간': '야간 감성', '밤': '야간 감성',
+      '컨셉': '컨셉', '테마': '컨셉',
+      '조용': '조용한', '한적': '조용한',
+      '활기': '시끄러운', '왁자지껄': '시끄러운',
+    };
+    const districtMap = { '남구': '남구', '중구': '중구', '동구': '동구', '북구': '북구', '울주': '울주군' };
+
+    let matchedMood = null;
+    let matchedDistrict = null;
+
+    for (const [kw, mood] of Object.entries(moodMap)) {
+      if (q.includes(kw)) { matchedMood = mood; break; }
+    }
+    for (const [kw, dist] of Object.entries(districtMap)) {
+      if (q.includes(kw)) { matchedDistrict = dist; break; }
+    }
+
+    // 2) 탐색 오버레이 열기
+    overlay.style.display = 'flex';
+    switchTab('search');
+
+    // 3) 필터 초기화
+    activeDistrict = '전체';
+    activeMood = '전체';
+    document.querySelectorAll('#district-filter-group .filter-btn').forEach(b => b.classList.remove('active'));
+    document.querySelectorAll('#mood-filter-group .filter-btn').forEach(b => b.classList.remove('active'));
+    document.querySelector('#district-filter-group .filter-btn').classList.add('active');
+    document.querySelector('#mood-filter-group .filter-btn').classList.add('active');
+
+    const overlayInput = document.getElementById('overlay-search-input');
+
+    if (matchedMood || matchedDistrict) {
+      // 분위기/지역 키워드 → 필터 버튼 활성화, 검색창 비움
+      if (overlayInput) overlayInput.value = '';
+      if (matchedMood) {
+        activeMood = matchedMood;
+        document.querySelectorAll('#mood-filter-group .filter-btn').forEach(b => {
+          b.classList.remove('active');
+          if (b.textContent.trim() === matchedMood) b.classList.add('active');
+        });
+      }
+      if (matchedDistrict) {
+        activeDistrict = matchedDistrict;
+        document.querySelectorAll('#district-filter-group .filter-btn').forEach(b => {
+          b.classList.remove('active');
+          if (b.textContent.trim() === matchedDistrict) b.classList.add('active');
+        });
+      }
+    } else {
+      // 카페명 직접 검색 → 검색창에 입력
+      if (overlayInput) overlayInput.value = raw;
+    }
+
+    filterOverlayCafes();
+  }
+  function closeSearch() {
+    overlay.style.display = "none";
+  }
+
+  function switchTab(tab) {
+    const panelSearch = document.getElementById('panel-search');
+    const panelMood = document.getElementById('panel-mood');
+    const tabSearch = document.getElementById('tab-search');
+    // tab-mood 탭은 제거됨 — 항상 search 패널만 표시
+    if (panelSearch) panelSearch.style.display = 'block';
+    if (panelMood) panelMood.style.display = 'none';
+    if (tabSearch) { tabSearch.style.background = 'var(--ocean-deep)'; tabSearch.style.color = '#fff'; }
+    filterOverlayCafes();
+  }
+
+  function setFilter(type, value, btn) {
+    if (type === 'district') {
+      activeDistrict = value;
+      document.querySelectorAll('#district-filter-group .filter-btn').forEach(b => b.classList.remove('active'));
+    } else {
+      activeMood = value;
+      document.querySelectorAll('#mood-filter-group .filter-btn').forEach(b => b.classList.remove('active'));
+    }
+    btn.classList.add('active');
+    filterOverlayCafes();
+  }
+
+  // 자연어 키워드 → mood 매핑
+  const moodKeywords = {
+    '감성': '감성', '인스타': '인스타 감성', '인스타감성': '인스타 감성',
+    '힐링': '힐링', '치유': '힐링', '자연': '자연', '숲': '자연', '식물': '자연',
+    '작업': '작업', '노트북': '작업', '집중': '작업',
+    '스터디': '스터디', '공부': '스터디',
+    '빈티지': '빈티지', '레트로': '빈티지', '옛날': '빈티지',
+    '야간': '야간 감성', '밤': '야간 감성',
+    '컨셉': '컨셉', '테마': '컨셉',
+    '조용': '조용한', '한적': '조용한',
+    '시끄': '시끄러운', '활기': '시끄러운', '왁자지껄': '시끄러운',
+    '남구': '남구', '중구': '중구', '동구': '동구', '북구': '북구', '울주': '울주군',
+  };
+
+  // mood 데이터 매핑 (기존 따뜻한/우드 등 → 새 카테고리)
+  const moodMapping = {};  // cafeData에 이미 새 mood 이름 적용됨
+
+  // AI 검색 타이머
+  let aiSearchTimer = null;
+  let lastAiQuery = '';
+
+  function filterOverlayCafes() {
+    const raw = (document.getElementById('overlay-search-input')?.value || '').trim();
+    // 띄어쓰기 제거한 버전도 병행 검색
+    const query = raw.toLowerCase();
+    const queryNoSpace = query.replace(/\s+/g, '');
+    let pool = cafeData;
+
+    if (activeDistrict !== '전체') pool = pool.filter(c => c.loc === activeDistrict);
+
+    if (!query) {
+      renderCafeCards(pool);
+      return;
+    }
+
+    // 1) 이름 직접 매칭 (띄어쓰기 무시 버전 포함)
+    const nameDirect = pool.filter(c => {
+      const name = c.name.toLowerCase();
+      const nameNoSpace = name.replace(/\s+/g, '');
+      return name.includes(query) ||
+             nameNoSpace.includes(queryNoSpace) ||
+             c.loc.includes(query);
+    });
+
+    // 이름 매칭이 있으면 즉시 표시하고 AI도 함께 실행
+    if (nameDirect.length > 0) {
+      renderCafeCards(nameDirect);
+    }
+
+    // 2) AI 분위기 검색 - 항상 실행 (이름 매칭 여부 무관)
+    lastAiQuery = '';  // 항상 새로 실행되도록 초기화
+    clearTimeout(aiSearchTimer);
+    aiSearchTimer = setTimeout(() => {
+      runAiCafeSearch(raw, pool, nameDirect);
+    }, 300);
+  }
+
+  async function runAiCafeSearch(query, pool, nameMatches) {
+    // 카페 목록 요약 (이름 + 분위기 + 지역)
+    const cafeList = pool.map((c, i) => `${i}:${c.name}(${c.loc},${c.mood})`).join('|');
+
+    try {
+      const res = await fetch('https://api.anthropic.com/v1/messages', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          model: 'claude-sonnet-4-20250514',
+          max_tokens: 300,
+          system: `너는 울산 카페 추천 AI야. 사용자 검색어(카페 이름 또는 원하는 분위기)를 분석해서 어울리는 카페 인덱스 번호를 JSON 배열로만 반환해. 분위기 묘사(예: "조용한", "감성적인", "인스타") 검색도 반드시 처리해. 예시 출력: [0,3,7,12]. 설명 없이 JSON 배열만.
+카페 목록(인덱스:이름(지역,분위기)): ${cafeList}`,
+          messages: [{ role: 'user', content: `검색어: "${query}"` }]
+        })
+      });
+      const data = await res.json();
+      const text = (data?.content?.[0]?.text || '').trim();
+      const match = text.match(/\[[\d,\s]+\]/);
+      if (match) {
+        const indices = JSON.parse(match[0]);
+        const aiResults = indices
+          .filter(i => i >= 0 && i < pool.length)
+          .map(i => pool[i]);
+        if (aiResults.length > 0) {
+          // AI 결과가 이름 매칭과 다르거나 더 많으면 교체
+          const nameSet = new Set((nameMatches || []).map(c => c.name));
+          const hasNewResults = aiResults.some(c => !nameSet.has(c.name));
+          if (hasNewResults || !nameMatches || nameMatches.length === 0) {
+            renderCafeCards(aiResults);
+          }
+          return;
+        }
+      }
+    } catch(e) {}
+
+    // fallback: 키워드 매칭
+    const q = query.toLowerCase();
+    const fallback = pool.filter(c =>
+      c.name.toLowerCase().replace(/\s+/g,'').includes(q.replace(/\s+/g,'')) ||
+      c.loc.includes(q) ||
+      c.mood.toLowerCase().includes(q) ||
+      Object.entries(moodKeywords).some(([kw, mood]) => q.includes(kw) && c.mood === mood)
+    );
+    // 이름 매칭이 이미 없었을 때만 fallback 결과 표시
+    if (!nameMatches || nameMatches.length === 0) {
+      renderCafeCards(fallback.length > 0 ? fallback : pool);
+    }
+  }
+
+  function renderCafeCards(list) {
+    const count = document.getElementById('filter-result-count');
+    if (count) count.textContent = `총 ${list.length}개의 카페`;
+
+    if (list.length === 0) {
+      randomContainer.innerHTML = `<div style="grid-column:1/-1;text-align:center;padding:80px 0;color:var(--ocean-accent);font-size:14px;opacity:0.7;letter-spacing:2px;">조건에 맞는 카페가 없습니다.</div>`;
+      return;
+    }
+
+    randomContainer.innerHTML = list.map(cafe => {
+      const dotColor = distColors[cafe.loc] || '#C0392B';
+      return `
+        <div class="list-item" onclick="openCafeDetail('${cafe.name.replace(/'/g, "\'")}', 'search'); document.getElementById('search-overlay').style.display='none';" style="cursor:pointer;">
+          <img src="${cafe.img}" alt="${cafe.name}" loading="lazy">
+          <div style="position:absolute;top:12px;left:12px;display:flex;align-items:center;gap:6px;background:rgba(255,255,255,0.15);backdrop-filter:blur(8px);border:1px solid rgba(255,255,255,0.25);color:#fff;font-size:10px;font-weight:700;letter-spacing:1px;padding:5px 11px;border-radius:20px;">
+            <span style="width:7px;height:7px;border-radius:50%;background:${dotColor};display:inline-block;flex-shrink:0;"></span>${cafe.loc}
+          </div>
+          <div class="list-info">
+            <h4>${cafe.name}</h4>
+            <p>${cafe.loc}</p>
+          </div>
+        </div>`;
+    }).join('');
+  }
+
+  function setMoodInput(el) {
+    document.getElementById('mood-text-input').value = el.textContent;
+    searchByMood();
+  }
+
+  // 분위기 키워드 매핑 테이블
+  const moodKeywordsMap = {
+    '감성':       ['감성', '예쁜', '포토', '소품', '아기자기', '귀여운'],
+    '힐링':       ['힐링', '치유', '따뜻', '포근', '아늑', '나무', '우드'],
+    '인스타 감성':['인스타', '사진', '뷰', '바다', '오션', '해변'],
+    '자연':       ['자연', '숲', '식물', '녹색', '나무', '산'],
+    '작업':       ['작업', '노트북', '집중', '콘센트', '카페라이팅'],
+    '스터디':     ['공부', '스터디', '조용', '혼자', '집중'],
+    '빈티지':     ['빈티지', '레트로', '옛날', '복고', '앤틱'],
+    '야간 감성':  ['야간', '밤', '야경', '감성', '조명'],
+    '컨셉':       ['컨셉', '테마', '독특', '특이한', '개성'],
+    '조용한':     ['조용', '한적', '고요', '평화'],
+    '시끄러운':   ['활기', '시끄러운', '왁자지껄', '에너지'],
+  };
+
+  function searchByMood() {
+    const input = (document.getElementById('mood-text-input')?.value || '').toLowerCase();
+    const resultEl = document.getElementById('mood-search-result');
+    if (!input.trim()) { resultEl.innerHTML = ''; return; }
+
+    // 각 카페에 점수 부여
+    const scored = cafeData.map(cafe => {
+      let score = 0;
+      const cafeMoods = [cafe.mood, ...(cafe.moods || [])];
+      cafeMoods.forEach(m => {
+        const keywords = moodKeywords[m] || [];
+        keywords.forEach(kw => { if (input.includes(kw)) score += 2; });
+      });
+      // 이름/지역 직접 매칭
+      if (input.includes(cafe.name.toLowerCase())) score += 5;
+      if (input.includes(cafe.loc)) score += 1;
+      return { ...cafe, score };
+    }).filter(c => c.score > 0).sort((a, b) => b.score - a.score);
+
+    if (scored.length === 0) {
+      resultEl.innerHTML = `<div class="mood-no-result">😔 딱 맞는 카페를 찾지 못했어요.<br>다른 키워드로 다시 시도해보세요.</div>`;
+      return;
+    }
+
+    const matchLabel = {
+      '감성': '감성적이고 포토제닉',
+      '힐링': '아늑한 힐링 공간',
+      '인스타 감성': '탁 트인 감각적인 뷰',
+      '자연': '자연 속 힐링 카페',
+      '작업': '조용히 집중하기 좋음',
+      '스터디': '공부하기 최적의 공간',
+      '빈티지': '레트로 감성 가득',
+      '야간 감성': '밤이 더 아름다운 카페',
+      '컨셉': '독특한 테마 카페',
+      '조용한': '한적하고 조용한 공간',
+      '시끄러운': '활기차고 에너지 넘치는 카페',
+    };
+
+    resultEl.innerHTML = `
+      <div style="font-size:12px; letter-spacing:2px; color:var(--ocean-accent); font-weight:700; margin-bottom:18px;">${scored.length}개의 카페를 추천드려요</div>
+      ${scored.slice(0,6).map(cafe => `
+        <div class="mood-result-card" onclick="openCafeDetail('${cafe.name}')">
+          <img class="mood-result-img" src="${cafe.img}" alt="${cafe.name}">
+          <div class="mood-result-info">
+            <div class="mood-result-name">${cafe.name}</div>
+            <div class="mood-result-tags">
+              <span class="mood-result-tag">${cafe.loc}</span>
+              <span class="mood-result-tag">${cafe.mood}</span>
+            </div>
+            <div class="mood-result-match">✦ ${matchLabel[cafe.mood] || cafe.mood}</div>
+          </div>
+          <span style="color:var(--ocean-accent); font-size:18px;">→</span>
+        </div>
+      `).join('')}
+    `;
+  }
+
+  function renderRandomCafes() {
+    filterOverlayCafes();
+  }
+
+  function openMap(query) {
+    if (isDragging) return; 
+    const url = `https://map.naver.com/v5/search/${encodeURIComponent(query)}`;
+    window.open(url, '_blank');
+  }
+
+  /* ── 카페 상세 페이지 ── */
+  let cafeDetailReturnSource = 'map'; // 'map' or 'search'
+
+  function openCafeDetail(cafeName, returnSource) {
+    const cafe = ulsanCafes.find(c => c.name === cafeName);
+    if (!cafe) return;
+
+    if (returnSource) cafeDetailReturnSource = returnSource;
+    else {
+      // auto-detect: if search overlay is open, return to search
+      const overlay = document.getElementById('search-overlay');
+      cafeDetailReturnSource = (overlay && overlay.style.display === 'flex') ? 'search' : 'map';
+    }
+
+    const screen = document.getElementById('cafe-detail-screen');
+    const color = districtColors[cafe.district] || '#C0392B';
+
+    // 히어로
+    document.getElementById('cds-dot').style.background = color;
+    document.getElementById('cds-district').textContent = cafe.district + ' · ' + cafe.mood;
+    document.getElementById('cds-title').textContent = cafe.name;
+    document.getElementById('cds-subtitle').textContent = cafe.sub + '  ·  ' + cafe.addr;
+
+    // 히어로 배경 색상
+    screen.querySelector('.cds-hero-bg').style.background =
+      `linear-gradient(135deg, ${color}18 0%, ${color}08 100%)`;
+
+    // 태그
+    document.getElementById('cds-tags').innerHTML =
+      (cafe.tags || []).map(t => `<span class="cds-tag">${t}</span>`).join('');
+
+    // 메뉴
+    document.getElementById('cds-menu').innerHTML =
+      (cafe.menu || []).map(m =>
+        `<div class="cds-menu-item"><span class="cds-menu-name">${m.name}</span><span class="cds-menu-price">${m.price}원</span></div>`
+      ).join('');
+
+    // 기본 정보 - naverUrl 미리 계산
+    const cafeNaverUrl = 'https://map.naver.com/v5/search/' + encodeURIComponent('울산 ' + cafe.name);
+    document.getElementById('cds-info').innerHTML = `
+      <div class="cds-info-card">
+        <span class="cds-info-icon">🕐</span>
+        <div class="cds-info-label">영업시간</div>
+        <div class="cds-info-value">${cafe.hours || '정보 없음'}</div>
+      </div>
+      <div class="cds-info-card" style="display:flex;flex-direction:column;gap:10px;">
+        <span class="cds-info-icon">📍</span>
+        <div class="cds-info-label">주소</div>
+        <div class="cds-info-value">${cafe.addr || ''}</div>
+        <button id="cds-map-btn"
+          style="margin-top:8px;padding:8px 16px;background:var(--ocean-deep);color:#fff;border:none;border-radius:20px;font-size:12px;font-weight:700;letter-spacing:1px;cursor:pointer;font-family:sans-serif;display:inline-flex;align-items:center;gap:6px;transition:0.2s;">
+          🗺 지도로 보기
+        </button>
+      </div>`;
+    // 버튼 이벤트는 innerHTML 이후 직접 연결 (onclick 인라인 회피)
+    const mapBtn = document.getElementById('cds-map-btn');
+    if (mapBtn) {
+      mapBtn.addEventListener('click', () => window.open(cafeNaverUrl, '_blank'));
+      mapBtn.addEventListener('mouseover', () => mapBtn.style.opacity = '0.75');
+      mapBtn.addEventListener('mouseout', () => mapBtn.style.opacity = '1');
+    }
+
+    // AI 분위기 설명 초기화
+    const aiEl = document.getElementById('cds-ai-desc');
+    aiEl.innerHTML = '<span style="opacity:0.4; letter-spacing:2px; font-size:12px;">✦ 분석 중...</span>';
+
+    // 화면 열기
+    screen.scrollTop = 0;
+    screen.classList.add('open');
+    document.body.style.overflow = 'hidden';
+
+    // AI 설명 Anthropic API 호출
+    fetchCafeAiDesc(cafe);
+  }
+
+  async function fetchCafeAiDesc(cafe) {
+    const aiEl = document.getElementById('cds-ai-desc');
+    try {
+      const prompt = `다음 카페에 대한 정보를 바탕으로 한국어로 2~3문장의 감성적인 소개를 써줘. 이 카페의 전체적인 분위기, 어떤 사람에게 어울리는지 포함해서. 마크다운 없이 일반 텍스트로만.
+카페명: ${cafe.name}
+위치: ${cafe.district} ${cafe.sub}
+분위기: ${cafe.mood}
+태그: ${(cafe.tags||[]).join(', ')}
+영업시간: ${cafe.hours}`;
+
+      const res = await fetch('https://api.anthropic.com/v1/messages', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          model: 'claude-sonnet-4-20250514',
+          max_tokens: 300,
+          messages: [{ role: 'user', content: prompt }]
+        })
+      });
+      const data = await res.json();
+      const text = data?.content?.[0]?.text || '';
+      if (text) {
+        aiEl.style.opacity = '0';
+        aiEl.style.transition = 'opacity 0.5s';
+        setTimeout(() => {
+          aiEl.textContent = text;
+          aiEl.style.opacity = '1';
+        }, 200);
+      } else {
+        throw new Error('no text');
+      }
+    } catch(e) {
+      // Fallback 설명
+      const fallbacks = {
+        '힐링':       '나무 향기가 감도는 따뜻한 공간에서, 일상의 속도를 잠시 내려놓을 수 있어요. 조용히 책을 읽거나 가까운 이와 대화를 나누기에 안성맞춤인 카페입니다.',
+        '조용한':     '군더더기 없이 정돈된 공간이 마음을 차분하게 만들어줍니다. 세련된 분위기를 즐기는 분들과 집중이 필요한 작업자에게 추천해요.',
+        '인스타 감성':'탁 트인 전망과 감각적인 인테리어가 특별한 순간을 만들어줍니다. 기억에 남는 사진을 남기고 싶은 분께 딱 맞는 공간이에요.',
+        '감성':       '곳곳에 숨겨진 소품과 디테일이 탐험하는 재미를 더해줍니다. SNS 감성 사진을 찍고 싶은 분과 특별한 분위기를 즐기고 싶은 분께 사랑받는 카페예요.',
+        '작업':       '집중하기 좋은 조용한 환경과 넉넉한 콘센트로 작업 효율을 높여드립니다. 노트북을 펼치고 오래 머물기에 최적화된 공간입니다.',
+        '스터디':     '독립된 좌석과 조용한 분위기로 공부에 집중하기 최적의 환경을 제공합니다. 시험 준비나 장시간 학습에 안성맞춤인 카페예요.',
+        '빈티지':     '시간이 멈춘 듯한 레트로 감성이 가득한 공간입니다. 옛날 감성을 즐기는 분과 독특한 인테리어를 좋아하는 분께 추천해요.',
+        '야간 감성':  '낮보다 밤이 더 아름다운 카페입니다. 은은한 조명 아래 감성적인 분위기를 즐기고 싶은 분들이 즐겨 찾는 공간이에요.',
+        '컨셉':       '독특한 테마와 개성 넘치는 인테리어로 가득한 특별한 공간입니다. 새로운 경험을 찾는 분들에게 강력 추천하는 카페예요.',
+        '자연':       '자연 속에 스며든 카페에서 도시의 소음을 잊을 수 있어요. 힐링이 필요한 모든 분들에게 완벽한 도피처가 되어줄 공간입니다.',
+      };
+      const desc = fallbacks[cafe.mood] || `${cafe.name}은(는) ${cafe.district} ${cafe.sub}에 위치한 카페입니다. ${cafe.mood} 분위기로 사랑받고 있어요.`;
+      aiEl.textContent = desc;
+    }
+  }
+
+  function closeCafeDetail() {
+    document.getElementById('cafe-detail-screen').classList.remove('open');
+    document.body.style.overflow = '';
+    // 이전 화면으로 복귀
+    if (cafeDetailReturnSource === 'search') {
+      document.getElementById('search-overlay').style.display = 'flex';
+    }
+    // map/home 복귀는 화면 유지 (이미 올바른 위치에 있음)
+  }
+
+  /* ── 전체화면 지도 모달 ── */
+  let fullMap = null;
+  let fullMarkersLayer = [];
+  let fullMapCurrentDistrict = '전체';
+
+  function openFullMap() {
+    const modal = document.getElementById('fullmap-modal');
+    modal.style.display = 'flex';
+    document.body.style.overflow = 'hidden';
+
+    if (!fullMap) {
+      setTimeout(() => {
+        const container = document.getElementById('fullmap-container');
+        fullMap = L.map('fullmap-container', {
+          center: [35.4900, 129.2900],
+          zoom: 11,
+          zoomControl: true,
+          scrollWheelZoom: true,
+          minZoom: 10, maxZoom: 17
+        });
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+          attribution: '© OSM', maxZoom: 19
+        }).addTo(fullMap);
+        // Access blocked 차단
+        hideAccessBlocked(document.getElementById('fullmap-container'));
+        renderFullMapMarkers('전체');
+        fullMap.invalidateSize();
+      }, 80);
+    } else {
+      setTimeout(() => {
+        fullMap.invalidateSize();
+        renderFullMapMarkers(fullMapCurrentDistrict);
+      }, 80);
+    }
+  }
+
+  function closeFullMap() {
+    document.getElementById('fullmap-modal').style.display = 'none';
+    document.body.style.overflow = '';
+  }
+
+  function fullMapFilter(district, btn) {
+    fullMapCurrentDistrict = district;
+    document.querySelectorAll('#fullmap-district-filter .map-filter-btn').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    renderFullMapMarkers(district);
+  }
+
+  function renderFullMapMarkers(district) {
+    if (!fullMap) return;
+    fullMarkersLayer.forEach(m => fullMap.removeLayer(m));
+    fullMarkersLayer = [];
+
+    const filtered = district === '전체' ? ulsanCafes : ulsanCafes.filter(c => c.district === district);
+    filtered.forEach(cafe => {
+      const color = districtColors[cafe.district] || '#1A3C5A';
+      const marker = L.marker([cafe.lat, cafe.lng], { icon: makeIcon(color) }).addTo(fullMap);
+      const popupHtml = `
+        <div class="cafe-popup">
+          <div class="cafe-popup-badge">${cafe.district.toUpperCase()} · CAFE</div>
+          <div class="cafe-popup-name">${cafe.name}</div>
+          <div class="cafe-popup-addr">${cafe.addr}</div>
+          <div class="cafe-popup-tags">
+            <span class="cafe-popup-tag">${cafe.district}</span>
+            <span class="cafe-popup-tag">${cafe.mood}</span>
+          </div>
+          <button class="cafe-popup-btn" onclick="closeFullMap(); openCafeDetail('${cafe.name}')">상세 정보 보기 →</button>
+        </div>`;
+      marker.bindPopup(popupHtml, { maxWidth: 260, minWidth: 220 });
+      marker.on('mouseover', function() { this.openPopup(); });
+      marker.on('click', function() { this.openPopup(); });
+      fullMarkersLayer.push(marker);
+    });
+
+    if (filtered.length > 0) {
+      const bounds = L.latLngBounds(filtered.map(c => [c.lat, c.lng]));
+      fullMap.fitBounds(bounds, { padding: [50, 50], maxZoom: 14 });
+    }
+  }
+
+  // ESC 키로 모달 닫기
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') {
+      closeFullMap();
+      closeCafeDetail();
+    }
+  });
+
+  // 모달 배경 클릭으로 닫기
+  document.getElementById('fullmap-modal').addEventListener('click', function(e) {
+    if (e.target === this) closeFullMap();
+  });
+
+  const slider = document.getElementById('explore-drag-list');
+  let isDown = false;
+  let isDragging = false; 
+  let startX;
+  let scrollLeft;
+
+  slider.addEventListener('mousedown', (e) => {
+    isDown = true; isDragging = false;
+    slider.classList.add('dragging');
+    startX = e.pageX - slider.offsetLeft;
+    scrollLeft = slider.scrollLeft;
+  });
+  slider.addEventListener('mouseleave', () => { isDown = false; slider.classList.remove('dragging'); });
+  slider.addEventListener('mouseup', () => { isDown = false; slider.classList.remove('dragging'); });
+  slider.addEventListener('mousemove', (e) => {
+    if (!isDown) return;
+    const x = e.pageX - slider.offsetLeft;
+    const walk = (x - startX) * 1.5;
+    if (Math.abs(x - startX) > 5) isDragging = true;
+    e.preventDefault();
+    slider.scrollLeft = scrollLeft - walk;
+  });
+
+  const rankList = document.getElementById('rank-list');
+  rankList.addEventListener('wheel', (e) => { e.stopPropagation(); }, { passive: false });
+
+  // 지도 섹션 휠 이벤트 차단 (지도 내부 스크롤 방지)
+  document.getElementById('ulsan-map').addEventListener('wheel', (e) => {
+    e.stopPropagation();
+  }, { passive: false });
+
+  window.addEventListener('wheel', (e) => {
+    if (overlay.style.display === "flex") return;
+    if (isScrolling) return;
+
+    const activeSec = sections[currentIdx];
+    const innerScroll = activeSec.querySelector('.inner-scroll-container');
+    
+    if (innerScroll && activeSec.id !== 'ranking') {
+      if (e.deltaY > 10 && innerScroll.scrollTop < (innerScroll.scrollHeight - innerScroll.clientHeight - 5)) return;
+      if (e.deltaY < -10 && innerScroll.scrollTop > 5) return;
+    }
+    if (activeSec.id === 'ranking') {
+       if (e.deltaY > 10 && innerScroll.scrollTop < (innerScroll.scrollHeight - innerScroll.clientHeight - 5)) return;
+       if (e.deltaY < -10 && innerScroll.scrollTop > 5) return;
+    }
+
+    if (Math.abs(e.deltaY) < 10) return;
+
+    if (e.deltaY > 0) {
+      if (currentIdx < sections.length - 1) moveSection(currentIdx + 1);
+    } else {
+      if (currentIdx > 0) moveSection(currentIdx - 1);
+    }
+  }, { passive: false });
+
+  function moveSection(idx) {
+    if (idx < 0 || idx >= sections.length) return;
+    isScrolling = true;
+    currentIdx = idx;
+    wrapper.style.transform = `translateY(-${currentIdx * 100}vh)`;
+
+    const innerScroll = sections[currentIdx].querySelector('.inner-scroll-container');
+    if (innerScroll) innerScroll.scrollTop = 0;
+    if (rankList) rankList.scrollTop = 0;
+
+    sections.forEach((sec, i) => {
+      const reveals = sec.querySelectorAll('.reveal');
+      if (i === currentIdx) {
+        sec.classList.add('visible');
+        reveals.forEach(el => el.classList.add('visible'));
+      }
+    });
+
+    // 지도 섹션으로 이동 시 Leaflet 초기화
+    if (idx === 2 && !mapInitialized) {
+      setTimeout(() => {
+        initMap();
+        mapInitialized = true;
+        map.invalidateSize();
+      }, 400);
+    } else if (idx === 2 && mapInitialized) {
+      setTimeout(() => map.invalidateSize(), 400);
+    }
+
+    setTimeout(() => { isScrolling = false; }, 1200);
+  }
+
+  function goToSection(idx) { moveSection(idx); }
+  window.onload = () => {
+    sections[0].querySelectorAll('.reveal').forEach(el => el.classList.add('visible'));
+  };
+</script>
+</body>
+</html>
